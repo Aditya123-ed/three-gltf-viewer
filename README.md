@@ -4,6 +4,8 @@ Preview glTF 2.0 models in WebGL using three.js and a drag-and-drop interface.
 
 Viewer: [gltf-viewer.donmccurdy.com](https://gltf-viewer.donmccurdy.com/)
 
+![screenshot](https://user-images.githubusercontent.com/1848368/31580352-b7354096-b101-11e7-86d7-f07677835812.png)
+
 This fork adds a per-mesh transparency panel. After a model loads, use the left-side **Mesh Transparency** panel to adjust each mesh independently from 0–100%. The panel includes mesh-name search, a floating show/hide toggle, and a Restore all action. Material copies are made per mesh so changing one mesh does not change other meshes that shared the same source glTF material.
 
 ## Quickstart
@@ -31,10 +33,10 @@ The model host must allow cross-origin requests (CORS) from the viewer domain.
 
 ## glTF 2.0 Resources
 
-- [THREE.GLTFLoader](https://threejs.org/docs/#examples/en/loaders/GLTFLoader)
-- [glTF 2.0 Specification](https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md)
-- [glTF 2.0 Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/)
+-   [THREE.GLTFLoader](https://threejs.org/docs/#examples/en/loaders/GLTFLoader)
+-   [glTF 2.0 Specification](https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md)
+-   [glTF 2.0 Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/)
 
 ## Known Issues
 
-- [ ] Limited drag-and-drop support in Safari.
+-   [ ] Limited drag-and-drop support in Safari.
