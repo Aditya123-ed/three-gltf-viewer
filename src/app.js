@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { Viewer } from './viewer.js';
+import { MeshOpacityController } from './mesh-opacity.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -32,6 +33,7 @@ class App {
 		this.el = el;
 		this.viewer = null;
 		this.viewerEl = null;
+		this.meshOpacityController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
 		this.inputEl = el.querySelector('#file-input');
@@ -103,6 +105,12 @@ class App {
 	 * @param  {Map<string, File>} fileMap
 	 */
 	view(rootFile, rootPath, fileMap) {
+		// Remove controls attached to the previous model before the viewer clears it.
+		if (this.meshOpacityController) {
+			this.meshOpacityController.dispose();
+			this.meshOpacityController = null;
+		}
+
 		if (this.viewer) this.viewer.clear();
 
 		const viewer = this.viewer || this.createViewer();
@@ -116,15 +124,22 @@ class App {
 
 		viewer
 			.load(fileURL, rootPath, fileMap)
-			.catch((e) => this.onError(e))
 			.then((gltf) => {
+				// Add the opacity panel to the loaded scene. This runs for both URL-loaded
+				// models and files dropped into the viewer.
+				const loadedScene = window.VIEWER.scene || gltf?.scene || gltf?.scenes?.[0];
+				if (loadedScene) {
+					this.meshOpacityController = new MeshOpacityController(loadedScene);
+				}
+
 				// TODO: GLTFLoader parsing can fail on invalid files. Ideally,
 				// we could run the validator either way.
 				if (!this.options.kiosk) {
 					this.validator.validate(fileURL, rootPath, fileMap, gltf);
 				}
-				cleanup();
-			});
+			})
+			.catch((e) => this.onError(e))
+			.finally(cleanup);
 	}
 
 	/**
