@@ -45,6 +45,7 @@ export class MeshOpacityController {
         box-sizing: border-box;
       }
       .mesh-opacity-panel *, .mesh-opacity-toggle * { box-sizing: border-box; }
+      .mesh-opacity-panel[hidden] { display: none; }
       .mesh-opacity-panel {
         position: fixed;
         z-index: 100001;
