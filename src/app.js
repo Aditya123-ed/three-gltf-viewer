@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { Viewer } from './viewer.js';
 import { MeshOpacityController } from './mesh-opacity.js';
+import { MeshSelectionController } from './mesh-selection.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -34,6 +35,7 @@ class App {
 		this.viewer = null;
 		this.viewerEl = null;
 		this.meshOpacityController = null;
+		this.meshSelectionController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
 		this.inputEl = el.querySelector('#file-input');
@@ -106,6 +108,10 @@ class App {
 	 */
 	view(rootFile, rootPath, fileMap) {
 		// Remove controls attached to the previous model before the viewer clears it.
+		if (this.meshSelectionController) {
+			this.meshSelectionController.dispose();
+			this.meshSelectionController = null;
+		}
 		if (this.meshOpacityController) {
 			this.meshOpacityController.dispose();
 			this.meshOpacityController = null;
@@ -130,6 +136,10 @@ class App {
 				const loadedScene = window.VIEWER.scene || gltf?.scene || gltf?.scenes?.[0];
 				if (loadedScene) {
 					this.meshOpacityController = new MeshOpacityController(loadedScene);
+					this.meshSelectionController = new MeshSelectionController(
+						loadedScene,
+						(mesh) => this.viewer?.selectMesh(mesh),
+					);
 				}
 
 				// TODO: GLTFLoader parsing can fail on invalid files. Ideally,

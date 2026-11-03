@@ -3,6 +3,7 @@ import {
 	AnimationMixer,
 	AxesHelper,
 	Box3,
+	BoxHelper,
 	Cache,
 	Color,
 	DirectionalLight,
@@ -58,6 +59,8 @@ export class Viewer {
 
 		this.lights = [];
 		this.content = null;
+		this.selectionHelper = null;
+		this.selectedMesh = null;
 		this.mixer = null;
 		this.clips = [];
 		this.gui = null;
@@ -154,6 +157,7 @@ export class Viewer {
 	}
 
 	render() {
+		if (this.selectionHelper) this.selectionHelper.update();
 		this.renderer.render(this.scene, this.activeCamera);
 		if (this.state.grid) {
 			this.axesCamera.position.copy(this.defaultCamera.position);
@@ -307,6 +311,47 @@ export class Viewer {
 		window.VIEWER.scene = this.content;
 
 		this.printGraph(this.content);
+	}
+
+	/**
+	 * Highlights a mesh selected from the mesh list.
+	 * The helper is kept outside the loaded model so it never changes the GLB.
+	 * @param {THREE.Mesh|null} mesh
+	 */
+	selectMesh(mesh) {
+		this.clearSelectedMesh();
+		if (!mesh || !this.content) return;
+
+		let belongsToContent = false;
+		this.content.traverse((node) => {
+			if (node === mesh) belongsToContent = true;
+		});
+		if (!belongsToContent) return;
+
+		this.selectedMesh = mesh;
+		this.selectionHelper = new BoxHelper(mesh, 0xffb347);
+		this.selectionHelper.material.depthTest = false;
+		this.selectionHelper.material.transparent = true;
+		this.selectionHelper.material.opacity = 1;
+		this.selectionHelper.material.toneMapped = false;
+		this.selectionHelper.renderOrder = 1000;
+		this.scene.add(this.selectionHelper);
+	}
+
+	/**
+	 * Removes the active mesh selection highlight.
+	 */
+	clearSelectedMesh() {
+		if (!this.selectionHelper) {
+			this.selectedMesh = null;
+			return;
+		}
+
+		this.scene.remove(this.selectionHelper);
+		this.selectionHelper.geometry.dispose();
+		this.selectionHelper.material.dispose();
+		this.selectionHelper = null;
+		this.selectedMesh = null;
 	}
 
 	printGraph(node) {
@@ -676,6 +721,7 @@ export class Viewer {
 	}
 
 	clear() {
+		this.clearSelectedMesh();
 		if (!this.content) return;
 
 		this.scene.remove(this.content);

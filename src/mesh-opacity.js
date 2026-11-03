@@ -1,3 +1,5 @@
+import { registerMeshPanel } from './mesh-panel-layout.js';
+
 /**
  * Per-mesh opacity controller for donmccurdy/three-gltf-viewer.
  * Creates independent material clones per mesh so editing one mesh does not
@@ -109,6 +111,7 @@ export class MeshOpacityController {
       .mesh-opacity-close { padding: 4px 8px; font-size: 15px; }
       .mesh-opacity-list {
         min-height: 0;
+        flex: 1 1 auto;
         overflow-y: auto;
         padding: 5px 10px 10px;
         overscroll-behavior: contain;
@@ -213,6 +216,7 @@ export class MeshOpacityController {
     this.searchInput.addEventListener('input', () => this._filterRows());
 
     document.body.append(this.toggleButton, this.panel);
+    this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 0);
   }
 
   _meshPath(mesh) {
@@ -334,6 +338,7 @@ export class MeshOpacityController {
   show() {
     if (this.disposed) return;
     this.panel.hidden = false;
+    this.layoutRegistration?.update();
     this.toggleButton.classList.remove('is-closed');
     this.toggleButton.title = 'Hide mesh transparency controls';
     this.toggleButton.setAttribute('aria-expanded', 'true');
@@ -342,6 +347,7 @@ export class MeshOpacityController {
   hide() {
     if (this.disposed) return;
     this.panel.hidden = true;
+    this.layoutRegistration?.update();
     this.toggleButton.classList.add('is-closed');
     this.toggleButton.title = 'Show mesh transparency controls';
     this.toggleButton.setAttribute('aria-expanded', 'false');
@@ -355,6 +361,7 @@ export class MeshOpacityController {
   dispose() {
     if (this.disposed) return;
     this.restoreAll();
+    this.layoutRegistration?.unregister();
     this.panel.remove();
     this.toggleButton.remove();
     if (this.injectedStyle) this.injectedStyle.remove();
