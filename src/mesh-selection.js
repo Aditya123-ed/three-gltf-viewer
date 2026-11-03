@@ -260,9 +260,48 @@ export class MeshSelectionController {
 
   _filterRows() {
     const query = this.searchInput.value.trim().toLowerCase();
+    const matchingRecords = [];
+
     this.records.forEach((record) => {
-      record.row.hidden = !record.searchText.includes(query);
+      const matches = !query || record.searchText.includes(query);
+      record.row.hidden = !matches;
+      if (matches) matchingRecords.push(record);
     });
+
+    // Update the result count so the search feedback is visible.
+    const countLabel = this.panel.querySelector('.mesh-selection-count');
+    if (countLabel) {
+      countLabel.textContent = query
+        ? `${matchingRecords.length} matching / ${this.records.length} meshes`
+        : `${this.records.length} mesh${this.records.length === 1 ? '' : 'es'} available`;
+    }
+
+    if (!query) return;
+
+    // Prefer a single exact mesh-name or full hierarchy-path match.
+    const exactMatches = matchingRecords.filter((record) => {
+      const meshName = (record.mesh.name || '').trim().toLowerCase();
+      const meshPath = this._meshPath(record.mesh).trim().toLowerCase();
+      return meshName === query || meshPath === query;
+    });
+
+    let autoMatch = null;
+    if (exactMatches.length === 1) {
+      autoMatch = exactMatches[0];
+    } else if (exactMatches.length === 0 && matchingRecords.length === 1) {
+      // Also auto-select when the typed partial name identifies only one mesh.
+      autoMatch = matchingRecords[0];
+    }
+
+    if (autoMatch) {
+      this.select(autoMatch.mesh);
+    } else if (
+      this.selectedMesh &&
+      !matchingRecords.some((record) => record.mesh === this.selectedMesh)
+    ) {
+      // Don't leave an old mesh highlighted when it no longer matches the search.
+      this.clearSelection();
+    }
   }
 
   select(mesh) {
@@ -273,6 +312,7 @@ export class MeshSelectionController {
       const selected = record.mesh === mesh;
       record.row.classList.toggle('selected', selected);
       record.row.setAttribute('aria-pressed', String(selected));
+      if (selected) record.row.scrollIntoView({ block: 'nearest' });
     });
 
     this.onSelect(mesh);
