@@ -8,6 +8,8 @@ Viewer: [gltf-viewer.donmccurdy.com](https://gltf-viewer.donmccurdy.com/)
 
 This fork adds a per-mesh transparency panel. After a model loads, use the left-side **Mesh Transparency** panel to adjust each mesh independently from 0–100%. The panel includes mesh-name search, a floating show/hide toggle, and a Restore all action. Material copies are made per mesh so changing one mesh does not change other meshes that shared the same source glTF material.
 
+It also adds a **Mesh Selection** panel listing the model's renderable meshes. Clicking a name highlights that exact mesh in the viewport with a colored bounding-box outline. Both panels have their own floating toggle buttons and share a stacked left-side layout, so either panel can be hidden independently. The selection panel includes mesh-name and hierarchy-path search, plus a clear-selection button.
+
 ## Quickstart
 
 ```
