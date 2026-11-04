@@ -226,7 +226,11 @@ export class Viewer {
 		camera.far = Math.max(camera.far, distance * 100);
 		camera.updateProjectionMatrix();
 
-		this._animateCameraTo(destination, center, duration, this.controls.enabled, null, false);
+		// Preserve the original enabled state when a second focus interrupts a transition.
+		const controlsEnabledAfterTransition = this.cameraTransition
+			? this.cameraTransition.controlsEnabled
+			: this.controls.enabled;
+		this._animateCameraTo(destination, center, duration, controlsEnabledAfterTransition, null, false);
 	}
 
 	/**
@@ -234,7 +238,7 @@ export class Viewer {
 	 * @param {{ position: Vector3, target: Vector3, controlsEnabled: boolean }} snapshot
 	 * @param {number} duration
 	 */
-	restoreCameraView(snapshot, duration = 700) {
+	restoreCameraView(snapshot, duration = 700, onComplete = null) {
 		if (!snapshot) return;
 		this.defaultCamera.near = Math.min(this.defaultCamera.near, snapshot.near);
 		this.defaultCamera.far = Math.max(this.defaultCamera.far, snapshot.far);
@@ -249,6 +253,7 @@ export class Viewer {
 				this.defaultCamera.near = snapshot.near;
 				this.defaultCamera.far = snapshot.far;
 				this.defaultCamera.updateProjectionMatrix();
+				if (onComplete) onComplete();
 			},
 			snapshot.autoRotate,
 		);
