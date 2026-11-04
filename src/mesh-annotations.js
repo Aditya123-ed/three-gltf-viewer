@@ -401,8 +401,11 @@ export class MeshAnnotationController {
   _restoreCameraFocus() {
     if (!this.focusSnapshot) return;
     const snapshot = this.focusSnapshot;
-    this.focusSnapshot = null;
-    this.viewer.restoreCameraView(snapshot, 700);
+    // Keep the starting view until the restore finishes. A new selection made during
+    // this animation can then cancel it and continue using the same original snapshot.
+    this.viewer.restoreCameraView(snapshot, 700, () => {
+      if (this.focusSnapshot === snapshot) this.focusSnapshot = null;
+    });
   }
 
   _activate(record, openEditor, notify) {
