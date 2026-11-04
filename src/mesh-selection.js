@@ -304,26 +304,27 @@ export class MeshSelectionController {
     }
   }
 
-  select(mesh) {
+  syncSelection(mesh) {
     if (this.disposed) return;
-    this.selectedMesh = mesh;
+    this.selectedMesh = mesh || null;
 
     this.records.forEach((record) => {
-      const selected = record.mesh === mesh;
+      const selected = record.mesh === this.selectedMesh;
       record.row.classList.toggle('selected', selected);
       record.row.setAttribute('aria-pressed', String(selected));
       if (selected) record.row.scrollIntoView({ block: 'nearest' });
     });
+  }
 
+  select(mesh) {
+    if (this.disposed) return;
+    this.syncSelection(mesh);
     this.onSelect(mesh);
   }
 
   clearSelection() {
-    this.selectedMesh = null;
-    this.records.forEach((record) => {
-      record.row.classList.remove('selected');
-      record.row.setAttribute('aria-pressed', 'false');
-    });
+    if (this.disposed) return;
+    this.syncSelection(null);
     this.onSelect(null);
   }
 
