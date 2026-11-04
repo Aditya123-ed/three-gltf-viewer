@@ -3,6 +3,7 @@ import WebGL from 'three/addons/capabilities/WebGL.js';
 import { Viewer } from './viewer.js';
 import { MeshOpacityController } from './mesh-opacity.js';
 import { MeshSelectionController } from './mesh-selection.js';
+import { MeshAnnotationController } from './mesh-annotations.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -36,6 +37,7 @@ class App {
 		this.viewerEl = null;
 		this.meshOpacityController = null;
 		this.meshSelectionController = null;
+		this.meshAnnotationController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
 		this.inputEl = el.querySelector('#file-input');
@@ -108,6 +110,10 @@ class App {
 	 */
 	view(rootFile, rootPath, fileMap) {
 		// Remove controls attached to the previous model before the viewer clears it.
+		if (this.meshAnnotationController) {
+			this.meshAnnotationController.dispose();
+			this.meshAnnotationController = null;
+		}
 		if (this.meshSelectionController) {
 			this.meshSelectionController.dispose();
 			this.meshSelectionController = null;
@@ -138,7 +144,29 @@ class App {
 					this.meshOpacityController = new MeshOpacityController(loadedScene);
 					this.meshSelectionController = new MeshSelectionController(
 						loadedScene,
-						(mesh) => this.viewer?.selectMesh(mesh),
+						(mesh) => {
+							this.viewer?.selectMesh(mesh);
+							this.meshAnnotationController?.syncSelection(mesh, true);
+						},
+					);
+
+					const annotationModelKey =
+						typeof rootFile === 'string'
+							? rootFile
+							: [
+									rootFile.name || 'uploaded-model',
+									rootFile.size || 0,
+									rootFile.lastModified || 0,
+								].join('|');
+
+					this.meshAnnotationController = new MeshAnnotationController(
+						loadedScene,
+						this.viewer,
+						annotationModelKey,
+						(mesh) => {
+							this.viewer?.selectMesh(mesh);
+							this.meshSelectionController?.syncSelection(mesh);
+						},
 					);
 				}
 
