@@ -341,15 +341,19 @@ export class MeshAnnotationController {
 
   _refreshRecord(record) {
     if (!record.row) return;
-    const annotation = this.annotations[record.path];
+    const annotation = this.annotations[record.path] || null;
     record.row.classList.toggle('selected', this.activeRecord === record);
     record.row.setAttribute('aria-pressed', String(this.activeRecord === record));
     record.status.textContent = annotation ? 'SAVED' : 'ADD';
     record.status.classList.toggle('saved', Boolean(annotation));
     if (record.marker) {
-      record.marker.textContent = 'i  ' + (annotation.title || annotation.subtitle || record.mesh.name || 'Information');
-      record.marker.title = annotation.title || annotation.subtitle || 'View object information';
-      record.marker.hidden = !this.showLabels || !annotation;
+      if (annotation) {
+        record.marker.textContent = 'i  ' + (annotation.title || annotation.subtitle || record.mesh.name || 'Information');
+        record.marker.title = annotation.title || annotation.subtitle || 'View object information';
+        record.marker.hidden = !this.showLabels;
+      } else {
+        record.marker.hidden = true;
+      }
     }
   }
 
