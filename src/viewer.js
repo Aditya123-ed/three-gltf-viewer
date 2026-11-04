@@ -189,6 +189,8 @@ export class Viewer {
 			position: this.defaultCamera.position.clone(),
 			target: this.controls.target.clone(),
 			controlsEnabled: this.controls.enabled,
+			near: this.defaultCamera.near,
+			far: this.defaultCamera.far,
 		};
 	}
 
@@ -205,7 +207,7 @@ export class Viewer {
 
 		const center = bounds.getCenter(new Vector3());
 		const size = bounds.getSize(new Vector3());
-		const radius = Math.max(size.length() * 0.5, this.defaultCamera.near * 2, 0.001);
+		const radius = Math.max(size.length() * 0.5, 0.000001);
 		const camera = this.defaultCamera;
 		const verticalFov = (camera.fov * Math.PI) / 180;
 		const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
@@ -217,6 +219,12 @@ export class Viewer {
 		direction.normalize();
 
 		const destination = center.clone().addScaledVector(direction, distance);
+
+		// Small GLB parts can be much closer than the original model-wide near plane.
+		camera.near = Math.min(camera.near, Math.max(distance / 1000, 0.0000001));
+		camera.far = Math.max(camera.far, distance * 100);
+		camera.updateProjectionMatrix();
+
 		this._animateCameraTo(destination, center, duration);
 	}
 
@@ -227,15 +235,30 @@ export class Viewer {
 	 */
 	restoreCameraView(snapshot, duration = 700) {
 		if (!snapshot) return;
+		this.defaultCamera.near = Math.min(this.defaultCamera.near, snapshot.near);
+		this.defaultCamera.far = Math.max(this.defaultCamera.far, snapshot.far);
+		this.defaultCamera.updateProjectionMatrix();
+
 		this._animateCameraTo(
 			snapshot.position,
 			snapshot.target,
 			duration,
 			snapshot.controlsEnabled,
+			() => {
+				this.defaultCamera.near = snapshot.near;
+				this.defaultCamera.far = snapshot.far;
+				this.defaultCamera.updateProjectionMatrix();
+			},
 		);
 	}
 
-	_animateCameraTo(position, target, duration = 700, finalControlsEnabled = this.controls.enabled) {
+	_animateCameraTo(
+		position,
+		target,
+		duration = 700,
+		finalControlsEnabled = this.controls.enabled,
+		onComplete = null,
+	) {
 		const startPosition = this.defaultCamera.position.clone();
 		const startTarget = this.controls.target.clone();
 
@@ -266,6 +289,7 @@ export class Viewer {
 				this.controls.enabled = finalControlsEnabled;
 				this.cameraTransition = null;
 				this.cameraTransitionFrame = null;
+				if (onComplete) onComplete();
 			}
 		};
 
