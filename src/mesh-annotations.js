@@ -176,9 +176,12 @@ export class MeshAnnotationController {
     this.toggleButton.innerHTML = '<span class="mesh-annotation-toggle-icon" aria-hidden="true">✎</span><span class="mesh-annotation-toggle-label">Properties</span>';
     this.toggleButton.title = 'Show Properties panel';
     this.toggleButton.setAttribute('aria-label', 'Toggle Properties panel');
+    this.toggleButton.classList.add('is-closed');
+    this.toggleButton.setAttribute('aria-expanded', 'false');
 
     this.panel = document.createElement('section');
     this.panel.className = 'mesh-annotation-panel';
+    this.panel.hidden = true;
     this.panel.setAttribute('aria-label', 'Mesh annotations');
     this.panel.innerHTML = [
       '<div class="mesh-annotation-header">',
