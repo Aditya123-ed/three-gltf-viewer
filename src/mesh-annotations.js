@@ -250,7 +250,7 @@ export class MeshAnnotationController {
     this.fileInput.hidden = true;
 
     document.body.append(this.toggleButton, this.panel, this.editor, this.fileInput);
-    this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 2);
+    this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 1);
   }
 
   _createOverlay() {
@@ -571,6 +571,12 @@ export class MeshAnnotationController {
   _showPreview(record) {
     const annotation = this.annotations[record.path];
     if (!annotation) return;
+
+    // Keep the original view when users open another annotation before closing the first.
+    if (!this.previewCameraSnapshot) {
+      this.previewCameraSnapshot = this.viewer.captureCameraView();
+    }
+
     this.previewRecord = record;
     this.previewTitle.textContent = annotation.title || record.mesh.name || 'Object information';
     this.previewSubtitle.textContent = annotation.subtitle || '';
@@ -578,12 +584,20 @@ export class MeshAnnotationController {
     this.previewDetails.textContent = annotation.details || '';
     this.previewDetails.hidden = !annotation.details;
     this.preview.hidden = false;
+
+    this.viewer.focusCameraOnObject(record.mesh, 850);
     this._updateMarkers();
   }
 
   _hidePreview() {
     if (this.preview) this.preview.hidden = true;
     this.previewRecord = null;
+
+    if (this.previewCameraSnapshot) {
+      const snapshot = this.previewCameraSnapshot;
+      this.previewCameraSnapshot = null;
+      this.viewer.restoreCameraView(snapshot, 700);
+    }
   }
 
   _setStatus(message) {
@@ -685,6 +699,7 @@ export class MeshAnnotationController {
 
   dispose() {
     if (this.disposed) return;
+    this._hidePreview();
     this.disposed = true;
     if (this.frameId !== null) window.cancelAnimationFrame(this.frameId);
     document.removeEventListener('keydown', this._onKeyDown);
