@@ -595,8 +595,13 @@ export class MeshAnnotationController {
 
     if (this.previewCameraSnapshot) {
       const snapshot = this.previewCameraSnapshot;
-      this.previewCameraSnapshot = null;
-      this.viewer.restoreCameraView(snapshot, 700);
+      // Keep the original snapshot until the restore animation completes. If another
+      // label is clicked during the return motion, it will still restore to the same view.
+      this.viewer.restoreCameraView(snapshot, 700, () => {
+        if (!this.previewRecord && this.previewCameraSnapshot === snapshot) {
+          this.previewCameraSnapshot = null;
+        }
+      });
     }
   }
 
