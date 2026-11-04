@@ -20,6 +20,7 @@ export class MeshAnnotationController {
 
     this._collectMeshes();
     this._loadAnnotations();
+    this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
     this._injectStyles();
     this._createUI();
     this._renderRows();
@@ -257,7 +258,7 @@ export class MeshAnnotationController {
     this.overlay.className = 'mesh-annotation-overlay';
     this.viewer.el.appendChild(this.overlay);
 
-    this.records.forEach((record) => this._ensureMarker(record));
+    this.annotatedRecords.forEach((record) => this._ensureMarker(record));
 
     this.preview = document.createElement('div');
     this.preview.className = 'mesh-annotation-preview';
@@ -371,7 +372,7 @@ export class MeshAnnotationController {
   }
 
   _countText() {
-    const saved = Object.keys(this.annotations).length;
+    const saved = this.annotatedRecords.length;
     return this.records.length + ' meshes · ' + saved + ' annotated';
   }
 
@@ -444,6 +445,10 @@ export class MeshAnnotationController {
       subtitle,
       details,
     };
+    if (!this.annotatedRecords.includes(this.activeRecord)) {
+      this.annotatedRecords.push(this.activeRecord);
+    }
+    this._ensureMarker(this.activeRecord);
     this._persist();
     this._refreshRecord(this.activeRecord);
     this._updateCounts();
@@ -455,6 +460,8 @@ export class MeshAnnotationController {
   _removeActiveAnnotation() {
     if (!this.activeRecord || !this.annotations[this.activeRecord.path]) return;
     delete this.annotations[this.activeRecord.path];
+    this.annotatedRecords = this.annotatedRecords.filter((record) => record !== this.activeRecord);
+    if (this.activeRecord.marker) this.activeRecord.marker.hidden = true;
     this._persist();
     this._refreshRecord(this.activeRecord);
     this._updateCounts();
@@ -485,6 +492,7 @@ export class MeshAnnotationController {
     this.showLabels = !this.showLabels;
     this.labelsButton.textContent = 'Labels: ' + (this.showLabels ? 'On' : 'Off');
     this.records.forEach((record) => this._refreshRecord(record));
+    if (!this.showLabels) this._hidePreview();
   }
 
   _createLocalCenter(record) {
@@ -498,11 +506,11 @@ export class MeshAnnotationController {
   }
 
   _ensureFrameLoop() {
-    if (this.disposed || this.frameId !== null || !Object.keys(this.annotations).length) return;
+    if (this.disposed || this.frameId !== null || !this.annotatedRecords.length) return;
     const tick = () => {
       if (this.disposed) return;
       this._updateMarkers();
-      if (Object.keys(this.annotations).length) {
+      if (this.annotatedRecords.length) {
         this.frameId = window.requestAnimationFrame(tick);
       } else {
         this.frameId = null;
@@ -522,12 +530,9 @@ export class MeshAnnotationController {
     const ndc = new Vector3();
     const world = new Vector3();
 
-    this.records.forEach((record) => {
+    this.annotatedRecords.forEach((record) => {
       const annotation = this.annotations[record.path];
-      if (!annotation) {
-        if (record.marker) record.marker.hidden = true;
-        return;
-      }
+      if (!annotation) return;
       this._ensureMarker(record);
 
       if (!this.showLabels) {
@@ -543,7 +548,10 @@ export class MeshAnnotationController {
 
       const visible = ndc.z >= -1 && ndc.z <= 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
       record.marker.hidden = !visible;
-      if (!visible) return;
+      if (!visible) {
+        if (record === this.previewRecord) this._hidePreview();
+        return;
+      }
 
       const x = canvasRect.left - overlayRect.left + ((ndc.x + 1) / 2) * canvasRect.width;
       const y = canvasRect.top - overlayRect.top + ((1 - ndc.y) / 2) * canvasRect.height;
@@ -639,6 +647,8 @@ export class MeshAnnotationController {
       });
 
       this._persist();
+      this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
+      this.annotatedRecords.forEach((record) => this._ensureMarker(record));
       this.records.forEach((record) => this._refreshRecord(record));
       this._updateCounts();
       this._ensureFrameLoop();
