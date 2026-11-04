@@ -14,6 +14,7 @@ export class MeshAnnotationController {
     this.annotations = Object.create(null);
     this.activeRecord = null;
     this.previewRecord = null;
+    this.focusSnapshot = null;
     this.showLabels = true;
     this.disposed = false;
     this.frameId = null;
@@ -330,7 +331,7 @@ export class MeshAnnotationController {
 
       copy.append(name, path);
       button.append(copy, status);
-      button.addEventListener('click', () => this._activate(record, true, true));
+      button.addEventListener('click', () => this._handlePanelRecordClick(record));
       this.list.appendChild(button);
 
       record.row = button;
@@ -381,25 +382,86 @@ export class MeshAnnotationController {
     this.exportButton.disabled = Object.keys(this.annotations).length === 0;
   }
 
+  _handlePanelRecordClick(record) {
+    // Clicking the currently-open row again acts as a deselect command.
+    if (this.activeRecord === record && !this.editor.hidden) {
+      this._deselect();
+      return;
+    }
+    this._activate(record, true, true);
+  }
+
+  _focusRecord(record) {
+    if (!this.focusSnapshot) {
+      this.focusSnapshot = this.viewer.captureCameraView();
+    }
+    this.viewer.focusCameraOnObject(record.mesh, 850);
+  }
+
+  _restoreCameraFocus() {
+    if (!this.focusSnapshot) return;
+    const snapshot = this.focusSnapshot;
+    this.focusSnapshot = null;
+    this.viewer.restoreCameraView(snapshot, 700);
+  }
+
   _activate(record, openEditor, notify) {
     if (this.disposed || !record) return;
+
+    if (this.previewRecord && this.previewRecord !== record) {
+      this._hidePreview(false);
+    }
+
     this.activeRecord = record;
     this.records.forEach((item) => this._refreshRecord(item));
+    if (record.row) record.row.scrollIntoView({ block: 'nearest' });
+
+    this._focusRecord(record);
+
     if (openEditor) {
-      this._hidePreview();
+      this._hidePreview(false);
       this._openEditor(record);
     } else {
       this._closeEditor();
     }
+
     if (notify) this.onSelect(record.mesh);
+  }
+
+  selectFromViewport(mesh) {
+    if (this.disposed) return;
+
+    if (!mesh) {
+      this._deselect();
+      return;
+    }
+
+    const record = this.records.find((item) => item.mesh === mesh);
+    if (!record) {
+      this._deselect();
+      return;
+    }
+
+    // Viewport selection updates the annotation list but does not open the editor.
+    this._hidePreview(false);
+    this._activate(record, false, true);
+  }
+
+  _deselect() {
+    if (this.disposed) return;
+
+    this._hidePreview(false);
+    this._closeEditor();
+    this.activeRecord = null;
+    this.records.forEach((record) => this._refreshRecord(record));
+    this.onSelect(null);
+    this._restoreCameraFocus();
   }
 
   syncSelection(mesh, openEditor = true) {
     if (this.disposed) return;
     if (!mesh) {
-      this.activeRecord = null;
-      this.records.forEach((record) => this._refreshRecord(record));
-      this._closeEditor();
+      this._deselect();
       return;
     }
     const record = this.records.find((item) => item.mesh === mesh);
@@ -479,9 +541,8 @@ export class MeshAnnotationController {
     marker.type = 'button';
     marker.className = 'mesh-annotation-marker';
     marker.addEventListener('click', () => {
-      this._activate(record, false, false);
+      this._activate(record, false, true);
       this._showPreview(record);
-      this.onSelect(record.mesh);
     });
     this.overlay.appendChild(marker);
     record.marker = marker;
@@ -572,11 +633,6 @@ export class MeshAnnotationController {
     const annotation = this.annotations[record.path];
     if (!annotation) return;
 
-    // Keep the original view when users open another annotation before closing the first.
-    if (!this.previewCameraSnapshot) {
-      this.previewCameraSnapshot = this.viewer.captureCameraView();
-    }
-
     this.previewRecord = record;
     this.previewTitle.textContent = annotation.title || record.mesh.name || 'Object information';
     this.previewSubtitle.textContent = annotation.subtitle || '';
@@ -584,25 +640,13 @@ export class MeshAnnotationController {
     this.previewDetails.textContent = annotation.details || '';
     this.previewDetails.hidden = !annotation.details;
     this.preview.hidden = false;
-
-    this.viewer.focusCameraOnObject(record.mesh, 850);
     this._updateMarkers();
   }
 
-  _hidePreview() {
+  _hidePreview(restoreCamera = true) {
     if (this.preview) this.preview.hidden = true;
     this.previewRecord = null;
-
-    if (this.previewCameraSnapshot) {
-      const snapshot = this.previewCameraSnapshot;
-      // Keep the original snapshot until the restore animation completes. If another
-      // label is clicked during the return motion, it will still restore to the same view.
-      this.viewer.restoreCameraView(snapshot, 700, () => {
-        if (!this.previewRecord && this.previewCameraSnapshot === snapshot) {
-          this.previewCameraSnapshot = null;
-        }
-      });
-    }
+    if (restoreCamera) this._restoreCameraFocus();
   }
 
   _setStatus(message) {
@@ -704,7 +748,8 @@ export class MeshAnnotationController {
 
   dispose() {
     if (this.disposed) return;
-    this._hidePreview();
+    this._hidePreview(false);
+    this._restoreCameraFocus();
     this.disposed = true;
     if (this.frameId !== null) window.cancelAnimationFrame(this.frameId);
     document.removeEventListener('keydown', this._onKeyDown);
