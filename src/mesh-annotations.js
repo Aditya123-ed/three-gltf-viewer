@@ -375,8 +375,9 @@ export class MeshAnnotationController {
       ? this.records.filter((record) => record.searchText.includes(query))
       : this.records;
 
+    const matchingSet = new Set(matchingRecords);
     this.records.forEach((record) => {
-      record.row.hidden = !matchingRecords.includes(record);
+      record.row.hidden = !matchingSet.has(record);
     });
 
     if (this.countLabel) {
