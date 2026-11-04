@@ -290,6 +290,11 @@ export class MeshAnnotationController {
     this.toggleButton.addEventListener('click', () => this.toggle());
     this.panel.querySelector('.mesh-annotation-hide').addEventListener('click', () => this.hide());
     this.searchInput.addEventListener('input', () => this._filterRows());
+    this.searchInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      this._navigateToSearchMatch();
+    });
     this.exportButton.addEventListener('click', () => this.exportAnnotations());
     this.importButton.addEventListener('click', () => this.fileInput.click());
     this.labelsButton.addEventListener('click', () => this._toggleLabels());
@@ -366,15 +371,66 @@ export class MeshAnnotationController {
 
   _filterRows() {
     const query = this.searchInput.value.trim().toLowerCase();
+    const matchingRecords = query
+      ? this.records.filter((record) => record.searchText.includes(query))
+      : this.records;
+
+    const matchingSet = new Set(matchingRecords);
     this.records.forEach((record) => {
-      record.row.hidden = !record.searchText.includes(query);
+      record.row.hidden = !matchingSet.has(record);
     });
-    const matches = this.records.filter((record) => !query || record.searchText.includes(query)).length;
+
     if (this.countLabel) {
       this.countLabel.textContent = query
-        ? matches + ' matching / ' + this.records.length + ' meshes'
+        ? matchingRecords.length + ' matching / ' + this.records.length + ' meshes'
         : this._countText();
     }
+
+    // When the search has narrowed to one mesh, select and focus it automatically.
+    // For ambiguous queries, wait for Enter so typing does not jump between objects.
+    if (query && matchingRecords.length === 1 && this.activeRecord !== matchingRecords[0]) {
+      this._selectSearchMatch(matchingRecords[0]);
+    }
+  }
+
+  _findBestSearchMatch(query, matchingRecords) {
+    if (!query || !matchingRecords.length) return null;
+
+    const exactName = matchingRecords.find(
+      (record) => (record.mesh.name || '').trim().toLowerCase() === query,
+    );
+    if (exactName) return exactName;
+
+    const exactPath = matchingRecords.find(
+      (record) => record.displayPath.trim().toLowerCase() === query,
+    );
+    if (exactPath) return exactPath;
+
+    return matchingRecords.find(
+      (record) => (record.mesh.name || '').trim().toLowerCase().startsWith(query),
+    ) || matchingRecords[0];
+  }
+
+  _selectSearchMatch(record) {
+    if (!record || this.disposed) return;
+    if (this.activeRecord === record) {
+      if (record.row) record.row.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
+    // Search selection highlights the mesh and focuses the camera without opening
+    // the annotation editor or stealing focus from the search field.
+    this._hidePreview(false);
+    this._activate(record, false, true);
+  }
+
+  _navigateToSearchMatch() {
+    const query = this.searchInput.value.trim().toLowerCase();
+    if (!query) return;
+
+    const matchingRecords = this.records.filter((record) => record.searchText.includes(query));
+    const record = this._findBestSearchMatch(query, matchingRecords);
+    if (record) this._selectSearchMatch(record);
   }
 
   _countText() {
