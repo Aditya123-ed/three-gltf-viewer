@@ -151,6 +151,10 @@ class App {
 						annotationModelKey,
 						(mesh) => this.viewer?.selectMesh(mesh),
 					);
+
+					this.viewer.setMeshPickHandler((mesh) =>
+						this.meshAnnotationController?.selectFromViewport(mesh),
+					);
 				}
 
 				// TODO: GLTFLoader parsing can fail on invalid files. Ideally,
