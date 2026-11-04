@@ -156,22 +156,45 @@ export class MeshOpacityController {
         z-index: 100002;
         left: 14px;
         top: 72px;
-        width: 38px;
+        min-width: 132px;
         height: 38px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        color: #fff;
-        background: #174e75;
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 9px;
+        padding: 0 12px;
+        color: #f4f8fc;
+        background: rgba(23, 43, 61, .97);
         border: 1px solid #6486a5;
         border-radius: 8px;
-        box-shadow: 0 3px 12px rgba(0,0,0,.5);
-        font-size: 19px;
+        box-shadow: 0 4px 14px rgba(0,0,0,.46);
+        font-family: sans-serif;
+        font-size: 11px;
+        font-weight: 600;
         line-height: 1;
+        letter-spacing: .15px;
+        white-space: nowrap;
         cursor: pointer;
+        transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
       }
-      .mesh-opacity-toggle:hover { background: #226a9a; }
-      .mesh-opacity-toggle.is-closed { background: #38424e; }
+      .mesh-opacity-toggle-icon {
+        display: inline-grid;
+        width: 16px;
+        flex: 0 0 16px;
+        place-items: center;
+        font-size: 16px;
+        line-height: 1;
+      }
+      .mesh-opacity-toggle-label {
+        display: inline-block;
+        font: 600 11px/1 sans-serif;
+      }
+      .mesh-opacity-toggle:hover {
+        background: #226a9a;
+        border-color: #8bb8d9;
+        box-shadow: 0 5px 16px rgba(0,0,0,.52);
+      }
+      .mesh-opacity-toggle.is-closed { background: rgba(45, 56, 69, .97); }
       @media (max-width: 600px) {
         .mesh-opacity-panel { left: 8px; top: 105px; width: min(350px, calc(100vw - 16px)); max-height: calc(100vh - 120px); }
         .mesh-opacity-toggle { left: 8px; top: 58px; }
@@ -185,9 +208,9 @@ export class MeshOpacityController {
     this.toggleButton = document.createElement('button');
     this.toggleButton.type = 'button';
     this.toggleButton.className = 'mesh-opacity-toggle';
-    this.toggleButton.textContent = '◉';
-    this.toggleButton.title = 'Hide mesh transparency controls';
-    this.toggleButton.setAttribute('aria-label', 'Toggle mesh transparency controls');
+    this.toggleButton.innerHTML = '<span class="mesh-opacity-toggle-icon" aria-hidden="true">◉</span><span class="mesh-opacity-toggle-label">Transparency</span>';
+    this.toggleButton.title = 'Hide Transparency panel';
+    this.toggleButton.setAttribute('aria-label', 'Toggle Transparency panel');
 
     this.panel = document.createElement('section');
     this.panel.className = 'mesh-opacity-panel';
@@ -340,7 +363,7 @@ export class MeshOpacityController {
     this.panel.hidden = false;
     this.layoutRegistration?.update();
     this.toggleButton.classList.remove('is-closed');
-    this.toggleButton.title = 'Hide mesh transparency controls';
+    this.toggleButton.title = 'Hide Transparency panel';
     this.toggleButton.setAttribute('aria-expanded', 'true');
   }
 
@@ -349,7 +372,7 @@ export class MeshOpacityController {
     this.panel.hidden = true;
     this.layoutRegistration?.update();
     this.toggleButton.classList.add('is-closed');
-    this.toggleButton.title = 'Show mesh transparency controls';
+    this.toggleButton.title = 'Show Transparency panel';
     this.toggleButton.setAttribute('aria-expanded', 'false');
   }
 
