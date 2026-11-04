@@ -189,6 +189,7 @@ export class Viewer {
 			position: this.defaultCamera.position.clone(),
 			target: this.controls.target.clone(),
 			controlsEnabled: this.controls.enabled,
+			autoRotate: this.controls.autoRotate,
 			near: this.defaultCamera.near,
 			far: this.defaultCamera.far,
 		};
@@ -225,7 +226,7 @@ export class Viewer {
 		camera.far = Math.max(camera.far, distance * 100);
 		camera.updateProjectionMatrix();
 
-		this._animateCameraTo(destination, center, duration);
+		this._animateCameraTo(destination, center, duration, this.controls.enabled, null, false);
 	}
 
 	/**
@@ -249,6 +250,7 @@ export class Viewer {
 				this.defaultCamera.far = snapshot.far;
 				this.defaultCamera.updateProjectionMatrix();
 			},
+			snapshot.autoRotate,
 		);
 	}
 
@@ -258,6 +260,7 @@ export class Viewer {
 		duration = 700,
 		finalControlsEnabled = this.controls.enabled,
 		onComplete = null,
+		finalAutoRotate = this.controls.autoRotate,
 	) {
 		const startPosition = this.defaultCamera.position.clone();
 		const startTarget = this.controls.target.clone();
@@ -267,8 +270,10 @@ export class Viewer {
 		this.cameraTransition = {
 			token,
 			controlsEnabled: this.controls.enabled,
+			autoRotate: this.controls.autoRotate,
 		};
 		this.controls.enabled = false;
+		this.controls.autoRotate = false;
 
 		const startedAt = performance.now();
 		const step = (now) => {
@@ -287,6 +292,7 @@ export class Viewer {
 				this.controls.target.copy(target);
 				this.defaultCamera.lookAt(this.controls.target);
 				this.controls.enabled = finalControlsEnabled;
+				this.controls.autoRotate = finalAutoRotate;
 				this.cameraTransition = null;
 				this.cameraTransitionFrame = null;
 				if (onComplete) onComplete();
@@ -303,6 +309,7 @@ export class Viewer {
 		}
 		if (this.cameraTransition) {
 			this.controls.enabled = this.cameraTransition.controlsEnabled;
+			this.controls.autoRotate = this.cameraTransition.autoRotate;
 			this.cameraTransition = null;
 		}
 	}
