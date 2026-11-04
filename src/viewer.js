@@ -61,6 +61,8 @@ export class Viewer {
 		this.content = null;
 		this.selectionHelper = null;
 		this.selectedMesh = null;
+		this.cameraTransitionFrame = null;
+		this.cameraTransition = null;
 		this.mixer = null;
 		this.clips = [];
 		this.gui = null;
@@ -176,6 +178,109 @@ export class Viewer {
 		this.axesCamera.aspect = this.axesDiv.clientWidth / this.axesDiv.clientHeight;
 		this.axesCamera.updateProjectionMatrix();
 		this.axesRenderer.setSize(this.axesDiv.clientWidth, this.axesDiv.clientHeight);
+	}
+
+	/**
+	 * Captures the current orbit-camera position and target for a later restore.
+	 * @return {{ position: Vector3, target: Vector3, controlsEnabled: boolean }}
+	 */
+	captureCameraView() {
+		return {
+			position: this.defaultCamera.position.clone(),
+			target: this.controls.target.clone(),
+			controlsEnabled: this.controls.enabled,
+		};
+	}
+
+	/**
+	 * Smoothly moves the camera close enough to frame the supplied object.
+	 * @param {THREE.Object3D} object
+	 * @param {number} duration
+	 */
+	focusCameraOnObject(object, duration = 850) {
+		if (!object || !this.content || this.activeCamera !== this.defaultCamera) return;
+
+		const bounds = new Box3().setFromObject(object);
+		if (bounds.isEmpty()) return;
+
+		const center = bounds.getCenter(new Vector3());
+		const size = bounds.getSize(new Vector3());
+		const radius = Math.max(size.length() * 0.5, this.defaultCamera.near * 2, 0.001);
+		const camera = this.defaultCamera;
+		const verticalFov = (camera.fov * Math.PI) / 180;
+		const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
+		const limitingHalfFov = Math.min(verticalFov, horizontalFov) / 2;
+		const distance = (radius / Math.sin(limitingHalfFov)) * 1.3;
+
+		let direction = camera.position.clone().sub(this.controls.target);
+		if (direction.lengthSq() < 1e-8) direction.set(1, 0.65, 1);
+		direction.normalize();
+
+		const destination = center.clone().addScaledVector(direction, distance);
+		this._animateCameraTo(destination, center, duration);
+	}
+
+	/**
+	 * Restores a view captured with captureCameraView().
+	 * @param {{ position: Vector3, target: Vector3, controlsEnabled: boolean }} snapshot
+	 * @param {number} duration
+	 */
+	restoreCameraView(snapshot, duration = 700) {
+		if (!snapshot) return;
+		this._animateCameraTo(
+			snapshot.position,
+			snapshot.target,
+			duration,
+			snapshot.controlsEnabled,
+		);
+	}
+
+	_animateCameraTo(position, target, duration = 700, finalControlsEnabled = this.controls.enabled) {
+		const startPosition = this.defaultCamera.position.clone();
+		const startTarget = this.controls.target.clone();
+
+		this._cancelCameraTransition();
+		const token = {};
+		this.cameraTransition = {
+			token,
+			controlsEnabled: this.controls.enabled,
+		};
+		this.controls.enabled = false;
+
+		const startedAt = performance.now();
+		const step = (now) => {
+			if (!this.cameraTransition || this.cameraTransition.token !== token) return;
+
+			const progress = Math.min(1, (now - startedAt) / Math.max(1, duration));
+			const eased = progress * progress * (3 - 2 * progress);
+			this.defaultCamera.position.lerpVectors(startPosition, position, eased);
+			this.controls.target.lerpVectors(startTarget, target, eased);
+			this.defaultCamera.lookAt(this.controls.target);
+
+			if (progress < 1) {
+				this.cameraTransitionFrame = window.requestAnimationFrame(step);
+			} else {
+				this.defaultCamera.position.copy(position);
+				this.controls.target.copy(target);
+				this.defaultCamera.lookAt(this.controls.target);
+				this.controls.enabled = finalControlsEnabled;
+				this.cameraTransition = null;
+				this.cameraTransitionFrame = null;
+			}
+		};
+
+		this.cameraTransitionFrame = window.requestAnimationFrame(step);
+	}
+
+	_cancelCameraTransition() {
+		if (this.cameraTransitionFrame !== null) {
+			window.cancelAnimationFrame(this.cameraTransitionFrame);
+			this.cameraTransitionFrame = null;
+		}
+		if (this.cameraTransition) {
+			this.controls.enabled = this.cameraTransition.controlsEnabled;
+			this.cameraTransition = null;
+		}
 	}
 
 	load(url, rootPath, assetMap) {
@@ -721,6 +826,7 @@ export class Viewer {
 	}
 
 	clear() {
+		this._cancelCameraTransition();
 		this.clearSelectedMesh();
 		if (!this.content) return;
 
