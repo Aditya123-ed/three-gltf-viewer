@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { Viewer } from './viewer.js';
 import { MeshOpacityController } from './mesh-opacity.js';
-import { MeshSelectionController } from './mesh-selection.js';
 import { MeshAnnotationController } from './mesh-annotations.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
@@ -36,7 +35,6 @@ class App {
 		this.viewer = null;
 		this.viewerEl = null;
 		this.meshOpacityController = null;
-		this.meshSelectionController = null;
 		this.meshAnnotationController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
@@ -114,10 +112,6 @@ class App {
 			this.meshAnnotationController.dispose();
 			this.meshAnnotationController = null;
 		}
-		if (this.meshSelectionController) {
-			this.meshSelectionController.dispose();
-			this.meshSelectionController = null;
-		}
 		if (this.meshOpacityController) {
 			this.meshOpacityController.dispose();
 			this.meshOpacityController = null;
@@ -142,14 +136,6 @@ class App {
 				const loadedScene = window.VIEWER.scene || gltf?.scene || gltf?.scenes?.[0];
 				if (loadedScene) {
 					this.meshOpacityController = new MeshOpacityController(loadedScene);
-					this.meshSelectionController = new MeshSelectionController(
-						loadedScene,
-						(mesh) => {
-							this.viewer?.selectMesh(mesh);
-							this.meshAnnotationController?.syncSelection(mesh, true);
-						},
-					);
-
 					const annotationModelKey =
 						typeof rootFile === 'string'
 							? rootFile
@@ -163,10 +149,7 @@ class App {
 						loadedScene,
 						this.viewer,
 						annotationModelKey,
-						(mesh) => {
-							this.viewer?.selectMesh(mesh);
-							this.meshSelectionController?.syncSelection(mesh);
-						},
+						(mesh) => this.viewer?.selectMesh(mesh),
 					);
 				}
 
