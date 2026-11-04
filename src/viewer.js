@@ -213,7 +213,7 @@ export class Viewer {
 		const verticalFov = (camera.fov * Math.PI) / 180;
 		const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
 		const limitingHalfFov = Math.min(verticalFov, horizontalFov) / 2;
-		const distance = (radius / Math.sin(limitingHalfFov)) * 1.3;
+		const distance = (radius / Math.sin(limitingHalfFov)) * 1.3 * 0.7;
 
 		let direction = camera.position.clone().sub(this.controls.target);
 		if (direction.lengthSq() < 1e-8) direction.set(1, 0.65, 1);
