@@ -14,9 +14,11 @@ import {
 	PMREMGenerator,
 	PerspectiveCamera,
 	PointsMaterial,
+	Raycaster,
 	REVISION,
 	Scene,
 	SkeletonHelper,
+	Vector2,
 	Vector3,
 	WebGLRenderer,
 	LinearToneMapping,
@@ -126,6 +128,35 @@ export class Viewer {
 
 		this.el.appendChild(this.renderer.domElement);
 
+		// Click-picking is separate from OrbitControls. A short pointer movement is
+		// treated as a click; orbit/pan gestures never trigger mesh selection.
+		this.raycaster = new Raycaster();
+		this.pointer = new Vector2();
+		this.meshPickHandler = null;
+		this.pointerDownInfo = null;
+		this._onCanvasPointerDown = (event) => {
+			if (event.button !== 0 || event.isPrimary === false) return;
+			this.pointerDownInfo = {
+				pointerId: event.pointerId,
+				x: event.clientX,
+				y: event.clientY,
+			};
+		};
+		this._onCanvasPointerUp = (event) => {
+			const down = this.pointerDownInfo;
+			this.pointerDownInfo = null;
+			if (!down || down.pointerId !== event.pointerId || event.button !== 0) return;
+			const movement = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+			if (movement > 6) return;
+			this._pickMeshAt(event.clientX, event.clientY);
+		};
+		this._onCanvasPointerCancel = () => {
+			this.pointerDownInfo = null;
+		};
+		this.renderer.domElement.addEventListener('pointerdown', this._onCanvasPointerDown);
+		this.renderer.domElement.addEventListener('pointerup', this._onCanvasPointerUp);
+		this.renderer.domElement.addEventListener('pointercancel', this._onCanvasPointerCancel);
+
 		this.cameraCtrl = null;
 		this.cameraFolder = null;
 		this.animFolder = null;
@@ -166,6 +197,49 @@ export class Viewer {
 			this.axesCamera.lookAt(this.axesScene.position);
 			this.axesRenderer.render(this.axesScene, this.axesCamera);
 		}
+	}
+
+	/**
+	 * Registers the application callback for direct viewport mesh picking.
+	 * @param {(mesh: THREE.Mesh|null) => void} handler
+	 */
+	setMeshPickHandler(handler) {
+		this.meshPickHandler = typeof handler === 'function' ? handler : null;
+	}
+
+	/**
+	 * Raycasts a genuine click on the canvas, ignoring orbit/drag gestures.
+	 * @param {number} clientX
+	 * @param {number} clientY
+	 */
+	_pickMeshAt(clientX, clientY) {
+		if (!this.meshPickHandler || !this.content || !this.activeCamera) return;
+
+		const rect = this.renderer.domElement.getBoundingClientRect();
+		if (
+			clientX < rect.left ||
+			clientX > rect.right ||
+			clientY < rect.top ||
+			clientY > rect.bottom ||
+			rect.width <= 0 ||
+			rect.height <= 0
+		) {
+			return;
+		}
+
+		this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+		this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+		this.raycaster.setFromCamera(this.pointer, this.activeCamera);
+
+		const intersections = this.raycaster.intersectObject(this.content, true);
+		const hit = intersections.find(
+			(intersection) =>
+				intersection.object &&
+				intersection.object.isMesh &&
+				intersection.object.geometry,
+		);
+
+		this.meshPickHandler(hit ? hit.object : null);
 	}
 
 	resize() {
@@ -863,6 +937,7 @@ export class Viewer {
 
 	clear() {
 		this._cancelCameraTransition();
+		this.pointerDownInfo = null;
 		this.clearSelectedMesh();
 		if (!this.content) return;
 
