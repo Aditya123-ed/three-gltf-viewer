@@ -209,11 +209,14 @@ export class MeshOpacityController {
     this.toggleButton.type = 'button';
     this.toggleButton.className = 'mesh-opacity-toggle';
     this.toggleButton.innerHTML = '<span class="mesh-opacity-toggle-icon" aria-hidden="true">◉</span><span class="mesh-opacity-toggle-label">Transparency</span>';
-    this.toggleButton.title = 'Hide Transparency panel';
+    this.toggleButton.title = 'Show Transparency panel';
     this.toggleButton.setAttribute('aria-label', 'Toggle Transparency panel');
+    this.toggleButton.classList.add('is-closed');
+    this.toggleButton.setAttribute('aria-expanded', 'false');
 
     this.panel = document.createElement('section');
     this.panel.className = 'mesh-opacity-panel';
+    this.panel.hidden = true;
     this.panel.setAttribute('aria-label', 'Mesh transparency controls');
     this.panel.innerHTML = `
       <div class="mesh-opacity-header">
