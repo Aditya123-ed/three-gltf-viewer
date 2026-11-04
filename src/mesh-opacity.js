@@ -168,7 +168,7 @@ export class MeshOpacityController {
         border: 1px solid #6486a5;
         border-radius: 8px;
         box-shadow: 0 4px 14px rgba(0,0,0,.46);
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: sans-serif;
         font-size: 11px;
         font-weight: 600;
         line-height: 1;
@@ -187,7 +187,7 @@ export class MeshOpacityController {
       }
       .mesh-opacity-toggle-label {
         display: inline-block;
-        font: 600 11px/1 Arial, Helvetica, sans-serif;
+        font: 600 11px/1 sans-serif;
       }
       .mesh-opacity-toggle:hover {
         background: #226a9a;
