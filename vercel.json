@@ -5,7 +5,11 @@
             "headers": {
                 "cache-control": "no-store"
             },
-            "dest": "https://drive.usercontent.google.com/download?id=1O_njLanwnwdgJGxpu1uIpgPFfVvR5I63&export=download&confirm=t"
+            "dest": "/api/client-model"
+        },
+        {
+            "src": "/model-check",
+            "dest": "/api/model-check"
         },
         {
             "src": "/assets/(.*)",
@@ -18,5 +22,10 @@
             "src": "/(.*)",
             "dest": "/public/$1"
         }
-    ]
+    ],
+    "functions": {
+        "api/client-model.mjs": {
+            "maxDuration": 300
+        }
+    }
 }
