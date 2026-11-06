@@ -1,8 +1,17 @@
 {
     "routes": [
         {
+            "src": "/models/client.glb",
+            "headers": {
+                "cache-control": "no-store"
+            },
+            "dest": "https://drive.usercontent.google.com/download?id=1O_njLanwnwdgJGxpu1uIpgPFfVvR5I63&export=download&confirm=t"
+        },
+        {
             "src": "/assets/(.*)",
-            "headers": { "cache-control": "max-age=604800, public" },
+            "headers": {
+                "cache-control": "max-age=604800, public"
+            },
             "dest": "/assets/$1"
         },
         {
