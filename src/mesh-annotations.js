@@ -255,13 +255,14 @@ export class MeshAnnotationController {
       '.mesh-annotation-marker:before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;background:#ffb347;border-radius:50%;vertical-align:1px}',
       '.mesh-annotation-marker:hover{background:#17537b;border-color:#b5e0ff}',
       '.mesh-annotation-marker[hidden]{display:none!important}',
-      '.mesh-annotation-preview{position:absolute;z-index:8;width:280px;max-width:calc(100% - 20px);max-height:calc(100% - 20px);overflow:auto;overscroll-behavior:contain;padding:13px;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #79b9e5;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.55);font-family:Arial,Helvetica,sans-serif;pointer-events:auto}',
-      '.mesh-annotation-preview-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}',
+      '.mesh-annotation-preview{position:absolute;z-index:8;display:flex;align-items:flex-start;gap:8px;width:280px;max-width:calc(100% - 20px);max-height:calc(100% - 20px);overflow:auto;overscroll-behavior:contain;padding:13px;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #79b9e5;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.55);font-family:Arial,Helvetica,sans-serif;pointer-events:auto}',
+      '.mesh-annotation-preview:has(> .mesh-annotation-image:not([hidden])){width:460px}',
+      '.mesh-annotation-preview-copy{flex:1;min-width:0}',
       '.mesh-annotation-preview-title{font-size:14px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}',
       '.mesh-annotation-preview-subtitle{margin-top:5px;color:#a9d8f7;font-size:11px;line-height:1.4}',
       '.mesh-annotation-preview-details{margin-top:8px;color:#d4dde7;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}',
-      '.mesh-annotation-preview .mesh-annotation-image{max-height:180px}',
-      '.mesh-annotation-preview-close{padding:1px 6px;color:#dce6ef;background:#303b49;border:1px solid #526174;border-radius:4px;cursor:pointer;font:inherit}',
+      '.mesh-annotation-preview .mesh-annotation-image{flex:none;width:min(42%,180px);max-height:180px;margin:0;object-position:top right}',
+      '.mesh-annotation-preview-close{flex:none;padding:1px 6px;color:#dce6ef;background:#303b49;border:1px solid #526174;border-radius:4px;cursor:pointer;font:inherit}',
       '@media(max-width:760px){.mesh-annotation-editor{left:14px;top:auto;bottom:14px;width:calc(100vw - 28px);max-width:none;max-height:62vh}}',
     ].join('\n');
     document.head.appendChild(style);
@@ -380,15 +381,13 @@ export class MeshAnnotationController {
     this.preview.className = 'mesh-annotation-preview';
     this.preview.hidden = true;
     this.preview.innerHTML = [
-      '<div class="mesh-annotation-preview-top">',
-      '  <div class="mesh-annotation-preview-copy">',
-      '    <div class="mesh-annotation-preview-title"></div>',
-      '    <div class="mesh-annotation-preview-subtitle"></div>',
-      '  </div>',
-      '  <button type="button" class="mesh-annotation-preview-close" aria-label="Close information">×</button>',
+      '<div class="mesh-annotation-preview-copy">',
+      '  <div class="mesh-annotation-preview-title"></div>',
+      '  <div class="mesh-annotation-preview-subtitle"></div>',
+      '  <div class="mesh-annotation-preview-details"></div>',
       '</div>',
-      '<div class="mesh-annotation-preview-details"></div>',
       '<img class="mesh-annotation-image" alt="" hidden>',
+      '<button type="button" class="mesh-annotation-preview-close" aria-label="Close information">×</button>',
     ].join('');
     this.previewTitle = this.preview.querySelector('.mesh-annotation-preview-title');
     this.previewSubtitle = this.preview.querySelector('.mesh-annotation-preview-subtitle');
