@@ -3,6 +3,8 @@ import { registerMeshPanel } from './mesh-panel-layout.js';
 
 const STYLE_ID = 'mesh-annotation-controller-styles';
 const FORMAT = 'three-gltf-viewer-annotations';
+const SHARED_MODEL = '/models/client.glb';
+const SHARED_ANNOTATIONS = '/models/client.annotations.json';
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_DATA_LENGTH = 4 * 1024 * 1024;
@@ -54,7 +56,9 @@ export class MeshAnnotationController {
     this.modelKey = String(modelKey || 'uploaded-model');
     this.onSelect = onSelect;
     this.records = [];
-    this.annotations = Object.create(null);
+    this.localAnnotations = Object.create(null);
+    this.sharedAnnotations = Object.create(null);
+    this.sharedRequest = null;
     this.activeRecord = null;
     this.previewRecord = null;
     this.focusSnapshot = null;
@@ -66,6 +70,7 @@ export class MeshAnnotationController {
 
     this._collectMeshes();
     this._loadAnnotations();
+    this.annotations = this._mergeAnnotations();
     this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
     this._injectStyles();
     this._createUI();
@@ -75,6 +80,7 @@ export class MeshAnnotationController {
     this._updateCounts();
     this._ensureFrameLoop();
     this._restoreFromDatabase();
+    if (this.modelKey === SHARED_MODEL) this._loadSharedAnnotations();
   }
 
   _collectMeshes() {
@@ -120,7 +126,7 @@ export class MeshAnnotationController {
       if (!saved) return;
       const parsed = JSON.parse(saved);
       if (parsed && parsed.annotations && typeof parsed.annotations === 'object') {
-        this.annotations = Object.assign(Object.create(null), parsed.annotations);
+        this.localAnnotations = Object.assign(Object.create(null), parsed.annotations);
       }
     } catch (error) {
       console.warn('[Mesh Annotations] Unable to read saved annotations.', error);
@@ -147,7 +153,7 @@ export class MeshAnnotationController {
         request.onerror = () => reject(request.error);
       });
       if (this.disposed || !saved) return;
-      this.annotations = Object.assign(Object.create(null), saved);
+      this.localAnnotations = Object.assign(Object.create(null), saved);
       this._syncAnnotationRecords();
     } catch (error) {
       this.annotationDb?.close();
@@ -165,12 +171,12 @@ export class MeshAnnotationController {
           const transaction = this.annotationDb.transaction('models', 'readwrite');
           transaction.oncomplete = () => resolve();
           transaction.onabort = () => reject(transaction.error);
-          transaction.objectStore('models').put(this.annotations, this.modelKey);
+          transaction.objectStore('models').put(this.localAnnotations, this.modelKey);
         });
       } else {
         window.localStorage.setItem(
           this._storageKey(),
-          JSON.stringify({ format: FORMAT, modelKey: this.modelKey, annotations: this.annotations }),
+          JSON.stringify({ format: FORMAT, modelKey: this.modelKey, annotations: this.localAnnotations }),
         );
       }
       if (!this.disposed) this._setStatus(message);
@@ -185,7 +191,45 @@ export class MeshAnnotationController {
     }
   }
 
+  async _loadSharedAnnotations() {
+    const request = new AbortController();
+    this.sharedRequest = request;
+    const timeout = window.setTimeout(() => request.abort(), 25000);
+    try {
+      const response = await fetch(SHARED_ANNOTATIONS, { cache: 'no-store', signal: request.signal });
+      // An unconfigured deployment returns 404. A local dev server may return its index page.
+      if (response.status === 404 || response.headers.get('content-type')?.includes('text/html')) return;
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const payload = await response.json();
+      if (this.disposed) return;
+      const shared = this._parseAnnotationPayload(payload);
+      this.sharedAnnotations = shared.annotations;
+      this._syncAnnotationRecords();
+      if (!shared.imported && shared.unmatched) {
+        console.warn('[Mesh Annotations] The published annotation file did not match the loaded model.');
+      }
+    } catch (error) {
+      if (!this.disposed) {
+        console.warn('[Mesh Annotations] Unable to load shared annotations.', error);
+        this._setStatus('Could not load shared annotations. Try refreshing the viewer.');
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      this.sharedRequest = null;
+    }
+  }
+
+  _mergeAnnotations() {
+    const annotations = Object.assign(Object.create(null), this.sharedAnnotations);
+    for (const [path, entry] of Object.entries(this.localAnnotations)) {
+      if (entry === null) delete annotations[path];
+      else annotations[path] = entry;
+    }
+    return annotations;
+  }
+
   _syncAnnotationRecords() {
+    this.annotations = this._mergeAnnotations();
     this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
     this.annotatedRecords.forEach((record) => this._ensureMarker(record));
     this.records.forEach((record) => this._refreshRecord(record));
@@ -723,7 +767,7 @@ export class MeshAnnotationController {
       return;
     }
 
-    this.annotations[this.activeRecord.path] = {
+    this.localAnnotations[this.activeRecord.path] = {
       meshName: this.activeRecord.mesh.name || 'Unnamed mesh',
       path: this.activeRecord.path,
       title,
@@ -731,6 +775,7 @@ export class MeshAnnotationController {
       details,
       ...(this.draftImage ? { image: this.draftImage } : {}),
     };
+    this.annotations[this.activeRecord.path] = this.localAnnotations[this.activeRecord.path];
     this.errorLabel.textContent = '';
     if (!this.annotatedRecords.includes(this.activeRecord)) {
       this.annotatedRecords.push(this.activeRecord);
@@ -739,13 +784,17 @@ export class MeshAnnotationController {
     this._refreshRecord(this.activeRecord);
     this._updateCounts();
     this._ensureFrameLoop();
-    this._persist('Annotation saved for ' + (this.activeRecord.mesh.name || 'this mesh') + '.');
+    this._persist('Annotation saved in this browser.');
     this.removeButton.hidden = false;
   }
 
   _removeActiveAnnotation() {
     if (!this.activeRecord || !this.annotations[this.activeRecord.path]) return;
-    delete this.annotations[this.activeRecord.path];
+    const path = this.activeRecord.path;
+    // A local removal can hide a shared annotation without changing the published copy.
+    if (this.sharedRequest || this.sharedAnnotations[path]) this.localAnnotations[path] = null;
+    else delete this.localAnnotations[path];
+    delete this.annotations[path];
     this.annotatedRecords = this.annotatedRecords.filter((record) => record !== this.activeRecord);
     if (this.activeRecord.marker) this.activeRecord.marker.hidden = true;
     this._refreshRecord(this.activeRecord);
@@ -907,44 +956,45 @@ export class MeshAnnotationController {
     this._setStatus('Annotation file exported.');
   }
 
+  _parseAnnotationPayload(payload) {
+    if (!payload || payload.format !== FORMAT || !Array.isArray(payload.annotations)) {
+      throw new Error('This is not a supported mesh annotation file.');
+    }
+
+    const recordsByPath = new Map(this.records.map((record) => [record.path, record]));
+    const annotations = Object.create(null);
+    let imported = 0;
+    let unmatched = 0;
+    for (const annotation of payload.annotations) {
+      const record = recordsByPath.get(annotation?.path);
+      if (!record) {
+        unmatched++;
+        continue;
+      }
+      if (annotation.image !== undefined && !isAnnotationImage(annotation.image)) {
+        throw new Error('An image for ' + (record.mesh.name || 'a mesh') + ' is invalid or too large.');
+      }
+      annotations[record.path] = {
+        meshName: record.mesh.name || 'Unnamed mesh',
+        path: record.path,
+        title: String(annotation.title || '').slice(0, 120),
+        subtitle: String(annotation.subtitle || '').slice(0, 180),
+        details: String(annotation.details || '').slice(0, 2000),
+        ...(annotation.image ? { image: annotation.image } : {}),
+      };
+      imported++;
+    }
+    return { annotations, imported, unmatched };
+  }
+
   async _importFile(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
     try {
       const payload = JSON.parse(await file.text());
-      if (!payload || payload.format !== FORMAT || !Array.isArray(payload.annotations)) {
-        throw new Error('This is not a supported mesh annotation file.');
-      }
-
       if (this.disposed) return;
-      const nextAnnotations = Object.assign(Object.create(null), this.annotations);
-      let imported = 0;
-      let unmatched = 0;
-      payload.annotations.forEach((annotation) => {
-        if (!annotation || typeof annotation.path !== 'string') {
-          unmatched++;
-          return;
-        }
-        const record = this.records.find((item) => item.path === annotation.path);
-        if (!record) {
-          unmatched++;
-          return;
-        }
-        if (annotation.image !== undefined && !isAnnotationImage(annotation.image)) {
-          throw new Error('An image for ' + (record.mesh.name || 'a mesh') + ' is invalid or too large.');
-        }
-        nextAnnotations[record.path] = {
-          meshName: record.mesh.name || 'Unnamed mesh',
-          path: record.path,
-          title: String(annotation.title || '').slice(0, 120),
-          subtitle: String(annotation.subtitle || '').slice(0, 180),
-          details: String(annotation.details || '').slice(0, 2000),
-          ...(annotation.image ? { image: annotation.image } : {}),
-        };
-        imported++;
-      });
-
-      this.annotations = nextAnnotations;
+      const { annotations, imported, unmatched } = this._parseAnnotationPayload(payload);
+      Object.assign(this.localAnnotations, annotations);
       this._closeEditor();
       this._hidePreview(false);
       this._syncAnnotationRecords();
@@ -984,6 +1034,7 @@ export class MeshAnnotationController {
     this._hidePreview(false);
     this._restoreCameraFocus();
     this.disposed = true;
+    this.sharedRequest?.abort();
     this.annotationDb?.close();
     if (this.frameId !== null) window.cancelAnimationFrame(this.frameId);
     document.removeEventListener('keydown', this._onKeyDown);

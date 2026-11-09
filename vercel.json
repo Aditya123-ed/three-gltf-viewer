@@ -8,6 +8,10 @@
             "dest": "/api/client-model"
         },
         {
+            "src": "/models/client\\.annotations\\.json",
+            "dest": "/api/client-annotations"
+        },
+        {
             "src": "/model-check",
             "dest": "/api/model-check"
         },
