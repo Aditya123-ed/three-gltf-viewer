@@ -3,6 +3,49 @@ import { registerMeshPanel } from './mesh-panel-layout.js';
 
 const STYLE_ID = 'mesh-annotation-controller-styles';
 const FORMAT = 'three-gltf-viewer-annotations';
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_IMAGE_DATA_LENGTH = 4 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1280;
+
+function isAnnotationImage(value) {
+  return typeof value === 'string' && value.length <= MAX_IMAGE_DATA_LENGTH &&
+    /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
+async function prepareAnnotationImage(file) {
+  if (!IMAGE_TYPES.includes(file.type)) {
+    throw new Error('Choose a JPG, PNG, or WebP image.');
+  }
+  if (file.size > MAX_IMAGE_FILE_BYTES) {
+    throw new Error('Choose an image under 20 MB.');
+  }
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const image = canvas.toDataURL('image/webp', 0.88);
+    if (!isAnnotationImage(image)) {
+      throw new Error('This image is too large after resizing. Try a smaller one.');
+    }
+    return image;
+  } finally {
+    bitmap.close();
+  }
+}
+
+function openAnnotationDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(FORMAT, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('models');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
 
 export class MeshAnnotationController {
   constructor(root, viewer, modelKey, onSelect = () => {}) {
@@ -18,6 +61,8 @@ export class MeshAnnotationController {
     this.showLabels = true;
     this.disposed = false;
     this.frameId = null;
+    this.imageReadId = 0;
+    this.annotationDb = null;
 
     this._collectMeshes();
     this._loadAnnotations();
@@ -29,6 +74,7 @@ export class MeshAnnotationController {
     this._bindEvents();
     this._updateCounts();
     this._ensureFrameLoop();
+    this._restoreFromDatabase();
   }
 
   _collectMeshes() {
@@ -74,7 +120,7 @@ export class MeshAnnotationController {
       if (!saved) return;
       const parsed = JSON.parse(saved);
       if (parsed && parsed.annotations && typeof parsed.annotations === 'object') {
-        this.annotations = parsed.annotations;
+        this.annotations = Object.assign(Object.create(null), parsed.annotations);
       }
     } catch (error) {
       console.warn('[Mesh Annotations] Unable to read saved annotations.', error);
@@ -85,20 +131,66 @@ export class MeshAnnotationController {
     return 'three-gltf-viewer:mesh-annotations:' + this.modelKey;
   }
 
-  _persist() {
+  async _restoreFromDatabase() {
+    // Keep the original localStorage entries readable until this model is saved to IndexedDB.
+    this.toggleButton.disabled = true;
     try {
-      window.localStorage.setItem(
-        this._storageKey(),
-        JSON.stringify({
-          format: FORMAT,
-          modelKey: this.modelKey,
-          annotations: this.annotations,
-        }),
-      );
+      const db = await openAnnotationDatabase();
+      if (this.disposed) {
+        db.close();
+        return;
+      }
+      this.annotationDb = db;
+      const saved = await new Promise((resolve, reject) => {
+        const request = db.transaction('models').objectStore('models').get(this.modelKey);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      if (this.disposed || !saved) return;
+      this.annotations = Object.assign(Object.create(null), saved);
+      this._syncAnnotationRecords();
+    } catch (error) {
+      this.annotationDb?.close();
+      this.annotationDb = null;
+      console.warn('[Mesh Annotations] Unable to open annotation database.', error);
+    } finally {
+      if (!this.disposed) this.toggleButton.disabled = false;
+    }
+  }
+
+  async _persist(message) {
+    try {
+      if (this.annotationDb) {
+        await new Promise((resolve, reject) => {
+          const transaction = this.annotationDb.transaction('models', 'readwrite');
+          transaction.oncomplete = () => resolve();
+          transaction.onabort = () => reject(transaction.error);
+          transaction.objectStore('models').put(this.annotations, this.modelKey);
+        });
+      } else {
+        window.localStorage.setItem(
+          this._storageKey(),
+          JSON.stringify({ format: FORMAT, modelKey: this.modelKey, annotations: this.annotations }),
+        );
+      }
+      if (!this.disposed) this._setStatus(message);
     } catch (error) {
       console.warn('[Mesh Annotations] Unable to save annotations in this browser.', error);
-      this._setStatus('Browser storage is unavailable. Export your annotations to keep a copy.');
+      if (!this.disposed) {
+        this._setStatus('Could not save in this browser. Export your annotations to keep a copy.');
+        if (!this.editor.hidden) {
+          this.errorLabel.textContent = 'Could not save in this browser. Use Export to keep a copy.';
+        }
+      }
     }
+  }
+
+  _syncAnnotationRecords() {
+    this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
+    this.annotatedRecords.forEach((record) => this._ensureMarker(record));
+    this.records.forEach((record) => this._refreshRecord(record));
+    this._updateCounts();
+    this._ensureFrameLoop();
   }
 
   _injectStyles() {
@@ -139,7 +231,7 @@ export class MeshAnnotationController {
       '.mesh-annotation-toggle-label{display:inline-block;font:600 11px/1 sans-serif}',
       '.mesh-annotation-toggle:hover{background:#226a9a;border-color:#8bb8d9;box-shadow:0 5px 16px rgba(0,0,0,.52)}',
       '.mesh-annotation-toggle.is-closed{background:rgba(45,56,69,.97)}',
-      '.mesh-annotation-editor{position:fixed;z-index:100004;left:374px;top:174px;width:360px;max-width:calc(100vw - 400px);max-height:calc(100vh - 28px);overflow:auto;padding:16px;color:#edf2f7;background:rgba(23,28,36,.99);border:1px solid #6486a5;border-radius:12px;box-shadow:0 14px 46px rgba(0,0,0,.62);font-size:13px}',
+      '.mesh-annotation-editor{position:fixed;z-index:100004;left:374px;top:174px;width:360px;max-width:calc(100vw - 400px);max-height:calc(100vh - 188px);overflow:auto;padding:16px;color:#edf2f7;background:rgba(23,28,36,.99);border:1px solid #6486a5;border-radius:12px;box-shadow:0 14px 46px rgba(0,0,0,.62);font-size:13px}',
       '.mesh-annotation-editor-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}',
       '.mesh-annotation-editor-title{font-size:16px;font-weight:700;line-height:1.3}',
       '.mesh-annotation-editor-mesh{margin-top:4px;color:#9eabba;font-size:10px;line-height:1.4;overflow-wrap:anywhere}',
@@ -148,6 +240,12 @@ export class MeshAnnotationController {
       '.mesh-annotation-field{display:block;width:100%;padding:9px 10px;color:#fff;background:#202833;border:1px solid #526174;border-radius:6px;font:inherit;line-height:1.45}',
       '.mesh-annotation-field::placeholder{color:#8291a2}',
       '.mesh-annotation-details{min-height:104px;resize:vertical}',
+      '.mesh-annotation-image-input{padding:6px;font-size:12px}',
+      '.mesh-annotation-image-input::file-selector-button{margin-right:6px;padding:4px 7px;color:#eaf2fa;background:#303b49;border:1px solid #526174;border-radius:4px;cursor:pointer;font:inherit}',
+      '.mesh-annotation-image{display:block;max-width:100%;margin-top:8px;object-fit:contain;border-radius:4px}',
+      '.mesh-annotation-image[hidden],.mesh-annotation-remove-image[hidden]{display:none}',
+      '.mesh-annotation-editor .mesh-annotation-image{max-height:112px}',
+      '.mesh-annotation-remove-image{margin-top:6px}',
       '.mesh-annotation-help{margin:8px 0;color:#93a3b5;font-size:10px;line-height:1.45}',
       '.mesh-annotation-error{min-height:16px;color:#ffb4a8;font-size:11px}',
       '.mesh-annotation-editor-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:10px}',
@@ -157,11 +255,12 @@ export class MeshAnnotationController {
       '.mesh-annotation-marker:before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;background:#ffb347;border-radius:50%;vertical-align:1px}',
       '.mesh-annotation-marker:hover{background:#17537b;border-color:#b5e0ff}',
       '.mesh-annotation-marker[hidden]{display:none!important}',
-      '.mesh-annotation-preview{position:absolute;z-index:8;width:280px;max-width:calc(100% - 20px);padding:13px;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #79b9e5;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.55);font-family:Arial,Helvetica,sans-serif;pointer-events:auto}',
+      '.mesh-annotation-preview{position:absolute;z-index:8;width:280px;max-width:calc(100% - 20px);max-height:calc(100% - 20px);overflow:auto;overscroll-behavior:contain;padding:13px;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #79b9e5;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.55);font-family:Arial,Helvetica,sans-serif;pointer-events:auto}',
       '.mesh-annotation-preview-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}',
       '.mesh-annotation-preview-title{font-size:14px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}',
       '.mesh-annotation-preview-subtitle{margin-top:5px;color:#a9d8f7;font-size:11px;line-height:1.4}',
       '.mesh-annotation-preview-details{margin-top:8px;color:#d4dde7;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}',
+      '.mesh-annotation-preview .mesh-annotation-image{max-height:180px}',
       '.mesh-annotation-preview-close{padding:1px 6px;color:#dce6ef;background:#303b49;border:1px solid #526174;border-radius:4px;cursor:pointer;font:inherit}',
       '@media(max-width:760px){.mesh-annotation-editor{left:14px;top:auto;bottom:14px;width:calc(100vw - 28px);max-width:none;max-height:62vh}}',
     ].join('\n');
@@ -233,7 +332,14 @@ export class MeshAnnotationController {
       '  <span class="mesh-annotation-label">Details / information</span>',
       '  <textarea class="mesh-annotation-field mesh-annotation-details mesh-annotation-details-input" maxlength="2000" placeholder="Write a brief explanation, specification, or client-facing note…"></textarea>',
       '</label>',
-      '<div class="mesh-annotation-help">Saved annotations appear as small labels beside the object in the 3D view. Click a label to read its details.</div>',
+      '<label class="mesh-annotation-field-wrap">',
+      '  <span class="mesh-annotation-label">Image (optional)</span>',
+      '  <input class="mesh-annotation-field mesh-annotation-image-input" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="mesh-annotation-image-help">',
+      '</label>',
+      '<div class="mesh-annotation-help" id="mesh-annotation-image-help">JPG, PNG, or WebP, up to 20 MB.</div>',
+      '<img class="mesh-annotation-image" alt="Selected annotation image" hidden>',
+      '<button type="button" class="mesh-annotation-button mesh-annotation-remove-image" hidden>Remove image</button>',
+      '<div class="mesh-annotation-help">Click the label beside the object in the 3D view to see its details and image.</div>',
       '<div class="mesh-annotation-error" aria-live="polite"></div>',
       '<div class="mesh-annotation-editor-actions">',
       '  <button type="button" class="mesh-annotation-button mesh-annotation-remove">Remove</button>',
@@ -246,6 +352,10 @@ export class MeshAnnotationController {
     this.titleInput = this.editor.querySelector('.mesh-annotation-title-input');
     this.subtitleInput = this.editor.querySelector('.mesh-annotation-subtitle-input');
     this.detailsInput = this.editor.querySelector('.mesh-annotation-details-input');
+    this.imageInput = this.editor.querySelector('.mesh-annotation-image-input');
+    this.editorImage = this.editor.querySelector('.mesh-annotation-image');
+    this.removeImageButton = this.editor.querySelector('.mesh-annotation-remove-image');
+    this.saveButton = this.editor.querySelector('.mesh-annotation-save');
     this.editorMeshLabel = this.editor.querySelector('.mesh-annotation-editor-mesh');
     this.errorLabel = this.editor.querySelector('.mesh-annotation-error');
     this.removeButton = this.editor.querySelector('.mesh-annotation-remove');
@@ -278,10 +388,12 @@ export class MeshAnnotationController {
       '  <button type="button" class="mesh-annotation-preview-close" aria-label="Close information">×</button>',
       '</div>',
       '<div class="mesh-annotation-preview-details"></div>',
+      '<img class="mesh-annotation-image" alt="" hidden>',
     ].join('');
     this.previewTitle = this.preview.querySelector('.mesh-annotation-preview-title');
     this.previewSubtitle = this.preview.querySelector('.mesh-annotation-preview-subtitle');
     this.previewDetails = this.preview.querySelector('.mesh-annotation-preview-details');
+    this.previewImage = this.preview.querySelector('.mesh-annotation-image');
     this.preview.querySelector('.mesh-annotation-preview-close').addEventListener('click', () => this._hidePreview());
     this.overlay.appendChild(this.preview);
   }
@@ -301,7 +413,12 @@ export class MeshAnnotationController {
     this.fileInput.addEventListener('change', (event) => this._importFile(event));
     this.editor.querySelector('.mesh-annotation-editor-close').addEventListener('click', () => this._closeEditor());
     this.editor.querySelector('.mesh-annotation-cancel').addEventListener('click', () => this._closeEditor());
-    this.editor.querySelector('.mesh-annotation-save').addEventListener('click', () => this._saveActiveAnnotation());
+    this.imageInput.addEventListener('change', () => this._chooseImage());
+    this.removeImageButton.addEventListener('click', () => {
+      this._resetImage('');
+      this.errorLabel.textContent = '';
+    });
+    this.saveButton.addEventListener('click', () => this._saveActiveAnnotation());
     this.removeButton.addEventListener('click', () => this._removeActiveAnnotation());
     this._onKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -540,6 +657,7 @@ export class MeshAnnotationController {
     this.titleInput.value = annotation.title || '';
     this.subtitleInput.value = annotation.subtitle || '';
     this.detailsInput.value = annotation.details || '';
+    this._resetImage(annotation.image);
     this.errorLabel.textContent = '';
     this.removeButton.hidden = !this.annotations[record.path];
     this.editor.hidden = false;
@@ -550,11 +668,53 @@ export class MeshAnnotationController {
   _closeEditor() {
     if (!this.editor) return;
     this.editor.hidden = true;
+    this._resetImage('');
     this.errorLabel.textContent = '';
   }
 
+  _setImage(element, image) {
+    const visible = isAnnotationImage(image);
+    element.hidden = !visible;
+    if (visible) element.src = image;
+    else element.removeAttribute('src');
+  }
+
+  _resetImage(image) {
+    this.imageReadId++;
+    this.imageInput.value = '';
+    this.saveButton.disabled = false;
+    this._setDraftImage(isAnnotationImage(image) ? image : '');
+  }
+
+  _setDraftImage(image) {
+    this.draftImage = image;
+    this._setImage(this.editorImage, image);
+    this.removeImageButton.hidden = !image;
+  }
+
+  async _chooseImage() {
+    const file = this.imageInput.files[0];
+    this.imageInput.value = '';
+    if (!file) return;
+
+    const readId = ++this.imageReadId;
+    this.saveButton.disabled = true;
+    this.errorLabel.textContent = 'Preparing image…';
+    try {
+      const image = await prepareAnnotationImage(file);
+      if (this.disposed || readId !== this.imageReadId) return;
+      this._setDraftImage(image);
+      this.errorLabel.textContent = '';
+    } catch (error) {
+      if (this.disposed || readId !== this.imageReadId) return;
+      this.errorLabel.textContent = error.name === 'Error' ? error.message : 'Could not read this image. Choose another file.';
+    } finally {
+      if (!this.disposed && readId === this.imageReadId) this.saveButton.disabled = false;
+    }
+  }
+
   _saveActiveAnnotation() {
-    if (!this.activeRecord) return;
+    if (!this.activeRecord || this.saveButton.disabled) return;
     const title = this.titleInput.value.trim();
     const subtitle = this.subtitleInput.value.trim();
     const details = this.detailsInput.value.trim();
@@ -570,16 +730,17 @@ export class MeshAnnotationController {
       title,
       subtitle,
       details,
+      ...(this.draftImage ? { image: this.draftImage } : {}),
     };
+    this.errorLabel.textContent = '';
     if (!this.annotatedRecords.includes(this.activeRecord)) {
       this.annotatedRecords.push(this.activeRecord);
     }
     this._ensureMarker(this.activeRecord);
-    this._persist();
     this._refreshRecord(this.activeRecord);
     this._updateCounts();
     this._ensureFrameLoop();
-    this._setStatus('Annotation saved for ' + (this.activeRecord.mesh.name || 'this mesh') + '.');
+    this._persist('Annotation saved for ' + (this.activeRecord.mesh.name || 'this mesh') + '.');
     this.removeButton.hidden = false;
   }
 
@@ -588,14 +749,14 @@ export class MeshAnnotationController {
     delete this.annotations[this.activeRecord.path];
     this.annotatedRecords = this.annotatedRecords.filter((record) => record !== this.activeRecord);
     if (this.activeRecord.marker) this.activeRecord.marker.hidden = true;
-    this._persist();
     this._refreshRecord(this.activeRecord);
     this._updateCounts();
     if (this.previewRecord === this.activeRecord) this._hidePreview();
-    this._setStatus('Annotation removed.');
+    this._persist('Annotation removed.');
     this.titleInput.value = '';
     this.subtitleInput.value = '';
     this.detailsInput.value = '';
+    this._resetImage('');
     this.removeButton.hidden = true;
   }
 
@@ -684,9 +845,8 @@ export class MeshAnnotationController {
       record.marker.style.top = y + 'px';
 
       if (record === this.previewRecord && !this.preview.hidden) {
-        const previewWidth = Math.min(280, Math.max(180, overlayRect.width - 20));
-        const left = Math.min(Math.max(10, x + 14), Math.max(10, overlayRect.width - previewWidth - 10));
-        const top = Math.min(Math.max(10, y - 8), Math.max(10, overlayRect.height - 160));
+        const left = Math.min(Math.max(10, x + 14), Math.max(10, overlayRect.width - this.preview.offsetWidth - 10));
+        const top = Math.min(Math.max(10, y - 8), Math.max(10, overlayRect.height - this.preview.offsetHeight - 10));
         this.preview.style.left = left + 'px';
         this.preview.style.top = top + 'px';
       }
@@ -703,12 +863,18 @@ export class MeshAnnotationController {
     this.previewSubtitle.hidden = !annotation.subtitle;
     this.previewDetails.textContent = annotation.details || '';
     this.previewDetails.hidden = !annotation.details;
+    this.previewImage.alt = 'Image for ' + this.previewTitle.textContent;
+    this._setImage(this.previewImage, annotation.image);
+    this.preview.scrollTop = 0;
     this.preview.hidden = false;
     this._updateMarkers();
   }
 
   _hidePreview(restoreCamera = true) {
-    if (this.preview) this.preview.hidden = true;
+    if (this.preview) {
+      this.preview.hidden = true;
+      this._setImage(this.previewImage, '');
+    }
     this.previewRecord = null;
     if (restoreCamera) this._restoreCameraFocus();
   }
@@ -751,6 +917,8 @@ export class MeshAnnotationController {
         throw new Error('This is not a supported mesh annotation file.');
       }
 
+      if (this.disposed) return;
+      const nextAnnotations = Object.assign(Object.create(null), this.annotations);
       let imported = 0;
       let unmatched = 0;
       payload.annotations.forEach((annotation) => {
@@ -763,23 +931,25 @@ export class MeshAnnotationController {
           unmatched++;
           return;
         }
-        this.annotations[record.path] = {
+        if (annotation.image !== undefined && !isAnnotationImage(annotation.image)) {
+          throw new Error('An image for ' + (record.mesh.name || 'a mesh') + ' is invalid or too large.');
+        }
+        nextAnnotations[record.path] = {
           meshName: record.mesh.name || 'Unnamed mesh',
           path: record.path,
           title: String(annotation.title || '').slice(0, 120),
           subtitle: String(annotation.subtitle || '').slice(0, 180),
           details: String(annotation.details || '').slice(0, 2000),
+          ...(annotation.image ? { image: annotation.image } : {}),
         };
         imported++;
       });
 
-      this._persist();
-      this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
-      this.annotatedRecords.forEach((record) => this._ensureMarker(record));
-      this.records.forEach((record) => this._refreshRecord(record));
-      this._updateCounts();
-      this._ensureFrameLoop();
-      this._setStatus(imported + ' annotations imported' + (unmatched ? ' · ' + unmatched + ' unmatched' : '') + '.');
+      this.annotations = nextAnnotations;
+      this._closeEditor();
+      this._hidePreview(false);
+      this._syncAnnotationRecords();
+      await this._persist(imported + ' annotations imported' + (unmatched ? ' · ' + unmatched + ' unmatched' : '') + '.');
     } catch (error) {
       window.alert('Unable to import annotations: ' + error.message);
     } finally {
@@ -815,6 +985,7 @@ export class MeshAnnotationController {
     this._hidePreview(false);
     this._restoreCameraFocus();
     this.disposed = true;
+    this.annotationDb?.close();
     if (this.frameId !== null) window.cancelAnimationFrame(this.frameId);
     document.removeEventListener('keydown', this._onKeyDown);
     if (this.layoutRegistration) this.layoutRegistration.unregister();
