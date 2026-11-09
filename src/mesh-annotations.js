@@ -186,7 +186,7 @@ export class MeshAnnotationController {
     this.panel.innerHTML = [
       '<div class="mesh-annotation-header">',
       '  <div class="mesh-annotation-heading">',
-      '    <span>Object Annotations</span>',
+      '    <span>Properties Text</span>',
       '    <button type="button" class="mesh-annotation-button mesh-annotation-close mesh-annotation-hide" aria-label="Hide panel" title="Hide panel">×</button>',
       '  </div>',
       '  <div class="mesh-annotation-count"></div>',
