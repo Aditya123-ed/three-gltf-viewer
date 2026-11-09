@@ -14,6 +14,28 @@
 	<link rel="stylesheet" href="style.css" />
 	<link href="https://fonts.googleapis.com/css?family=Raleway:300,400" rel="stylesheet" />
 	<script defer type="module" src="src/app.js"></script>
+	<style>
+		.viewer-help {
+			position: fixed;
+			right: max(16px, env(safe-area-inset-right));
+			bottom: max(40px, env(safe-area-inset-bottom));
+			z-index: 1000;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 44px;
+			padding: 0 18px;
+			border: 1px solid #666;
+			border-radius: 6px;
+			background: #303030;
+			color: #fff;
+			font: 600 13px/1.2 Arial, sans-serif;
+			text-decoration: none;
+			box-shadow: 0 2px 8px #0006;
+		}
+		.viewer-help:hover { background: #464646; }
+		.viewer-help:focus-visible { outline: 2px solid #9cc7ff; outline-offset: 3px; }
+	</style>
 </head>
 <body>
 	<header>
@@ -43,4 +65,11 @@
 		</div>
 		<div class="spinner"></div>
 	</main>
+	<a
+		class="viewer-help"
+		href="https://docs.google.com/document/d/1uIaHFztPGOeHDTCpOVYiGgUkhD2Nkr6UJ34ya_qV9H8/edit?usp=sharing"
+		target="_blank"
+		rel="noopener noreferrer"
+		title="Open the help guide in a new tab"
+	>Help Me</a>
 </body>
