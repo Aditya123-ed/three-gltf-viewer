@@ -49,6 +49,19 @@ function openAnnotationDatabase() {
   });
 }
 
+function pathWithoutIndices(path) {
+  return path.replace(/\[\d+\](?= \/ |$)/g, '');
+}
+
+function uniqueRecords(records, keyOf) {
+  const index = new Map();
+  for (const record of records) {
+    const key = keyOf(record);
+    if (key) index.set(key, index.has(key) ? null : record);
+  }
+  return index;
+}
+
 export class MeshAnnotationController {
   constructor(root, viewer, modelKey, onSelect = () => {}) {
     this.root = root;
@@ -69,6 +82,9 @@ export class MeshAnnotationController {
     this.annotationDb = null;
 
     this._collectMeshes();
+    this.recordsByPath = new Map(this.records.map((record) => [record.path, record]));
+    this.recordsByNamePath = uniqueRecords(this.records, (record) => pathWithoutIndices(record.path));
+    this.recordsByName = uniqueRecords(this.records, (record) => record.mesh.name);
     this._loadAnnotations();
     this.annotations = this._mergeAnnotations();
     this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
@@ -110,6 +126,27 @@ export class MeshAnnotationController {
     return segments.join(' / ') || mesh.name || mesh.type || 'Mesh';
   }
 
+  _findAnnotationRecord(path, meshName) {
+    if (typeof path !== 'string') return null;
+    return this.recordsByPath.get(path) ||
+      this.recordsByNamePath.get(pathWithoutIndices(path)) ||
+      this.recordsByName.get(meshName) ||
+      null;
+  }
+
+  _remapLocalAnnotations(saved) {
+    const annotations = Object.assign(Object.create(null), saved);
+    for (const [path, annotation] of Object.entries(saved)) {
+      if (this.recordsByPath.has(path)) continue;
+      const record = this._findAnnotationRecord(path, annotation?.meshName);
+      // Keep unresolvable local entries so switching back to an older model can recover them.
+      if (!record || Object.hasOwn(annotations, record.path)) continue;
+      annotations[record.path] = annotation && { ...annotation, path: record.path };
+      delete annotations[path];
+    }
+    return annotations;
+  }
+
   _displayPath(mesh) {
     const names = [];
     let current = mesh;
@@ -126,7 +163,7 @@ export class MeshAnnotationController {
       if (!saved) return;
       const parsed = JSON.parse(saved);
       if (parsed && parsed.annotations && typeof parsed.annotations === 'object') {
-        this.localAnnotations = Object.assign(Object.create(null), parsed.annotations);
+        this.localAnnotations = this._remapLocalAnnotations(parsed.annotations);
       }
     } catch (error) {
       console.warn('[Mesh Annotations] Unable to read saved annotations.', error);
@@ -153,7 +190,7 @@ export class MeshAnnotationController {
         request.onerror = () => reject(request.error);
       });
       if (this.disposed || !saved) return;
-      this.localAnnotations = Object.assign(Object.create(null), saved);
+      this.localAnnotations = this._remapLocalAnnotations(saved);
       this._syncAnnotationRecords();
     } catch (error) {
       this.annotationDb?.close();
@@ -205,8 +242,8 @@ export class MeshAnnotationController {
       const shared = this._parseAnnotationPayload(payload);
       this.sharedAnnotations = shared.annotations;
       this._syncAnnotationRecords();
-      if (!shared.imported && shared.unmatched) {
-        console.warn('[Mesh Annotations] The published annotation file did not match the loaded model.');
+      if (shared.unmatched) {
+        this._setStatus(shared.unmatched + ' shared annotation(s) could not be matched to this model.');
       }
     } catch (error) {
       if (!this.disposed) {
@@ -961,13 +998,12 @@ export class MeshAnnotationController {
       throw new Error('This is not a supported mesh annotation file.');
     }
 
-    const recordsByPath = new Map(this.records.map((record) => [record.path, record]));
     const annotations = Object.create(null);
     let imported = 0;
     let unmatched = 0;
     for (const annotation of payload.annotations) {
-      const record = recordsByPath.get(annotation?.path);
-      if (!record) {
+      const record = this._findAnnotationRecord(annotation?.path, annotation?.meshName);
+      if (!record || (annotation.path !== record.path && Object.hasOwn(annotations, record.path))) {
         unmatched++;
         continue;
       }
