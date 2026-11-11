@@ -150,6 +150,7 @@ class App {
 						this.viewer,
 						annotationModelKey,
 						(mesh) => this.viewer?.selectMesh(mesh),
+						gltf.parser?.associations,
 					);
 
 					this.viewer.setMeshPickHandler((mesh) =>

@@ -63,12 +63,16 @@ function uniqueRecords(records, keyOf) {
 }
 
 export class MeshAnnotationController {
-  constructor(root, viewer, modelKey, onSelect = () => {}) {
+  constructor(root, viewer, modelKey, onSelect = () => {}, associations = null) {
     this.root = root;
     this.viewer = viewer;
     this.modelKey = String(modelKey || 'uploaded-model');
     this.onSelect = onSelect;
+    this.associations = associations;
     this.records = [];
+    this.objectGroups = [];
+    this.groupByObject = new Map();
+    this.recordByMesh = new Map();
     this.localAnnotations = Object.create(null);
     this.sharedAnnotations = Object.create(null);
     this.sharedRequest = null;
@@ -102,16 +106,52 @@ export class MeshAnnotationController {
   _collectMeshes() {
     this.root.traverse((mesh) => {
       if (!mesh.isMesh || !mesh.geometry) return;
-      this.records.push({
+      // GLTFLoader creates a child Mesh for each material primitive. Its node
+      // association identifies the original exported object containing those parts.
+      const object = this._sourceObject(mesh);
+      let group = this.groupByObject.get(object);
+      if (!group) {
+        group = {
+          object,
+          name: object.userData.name || object.name || 'Unnamed object',
+          displayPath: this._displayPath(object),
+          records: [],
+          searchText: '',
+        };
+        this.objectGroups.push(group);
+        this.groupByObject.set(object, group);
+      }
+      const record = {
         mesh,
+        objectGroup: group,
         row: null,
         marker: null,
         path: this._stablePath(mesh),
         displayPath: this._displayPath(mesh),
         searchText: '',
         localCenter: null,
-      });
+      };
+      group.records.push(record);
+      this.records.push(record);
+      this.recordByMesh.set(mesh, record);
     });
+  }
+
+  _sourceObject(mesh) {
+    let object = mesh;
+    while (object && object !== this.root) {
+      if (this.associations?.get(object)?.nodes !== undefined) return object;
+      object = object.parent;
+    }
+    return mesh;
+  }
+
+  _preferredRecord(group, candidate = null) {
+    if (candidate && this.annotations[candidate.path]) return candidate;
+    if (this.activeRecord?.objectGroup === group && this.annotations[this.activeRecord.path]) {
+      return this.activeRecord;
+    }
+    return group.records.find((record) => this.annotations[record.path]) || group.records[0];
   }
 
   _stablePath(mesh) {
@@ -151,7 +191,8 @@ export class MeshAnnotationController {
     const names = [];
     let current = mesh;
     while (current) {
-      if (current.name) names.unshift(current.name);
+      const name = current.userData.name || current.name;
+      if (name) names.unshift(name);
       current = current.parent;
     }
     return names.join(' / ') || mesh.type || 'Mesh';
@@ -512,11 +553,11 @@ export class MeshAnnotationController {
   _renderRows() {
     this.list.innerHTML = '';
     if (!this.records.length) {
-      this.list.innerHTML = '<div class="mesh-annotation-empty">No renderable meshes were found in this model.</div>';
+      this.list.innerHTML = '<div class="mesh-annotation-empty">No renderable objects were found in this model.</div>';
       return;
     }
 
-    this.records.forEach((record, index) => {
+    this.objectGroups.forEach((group, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'mesh-annotation-item';
@@ -527,37 +568,46 @@ export class MeshAnnotationController {
 
       const name = document.createElement('span');
       name.className = 'mesh-annotation-name';
-      name.textContent = (index + 1) + '. ' + (record.mesh.name || 'Unnamed mesh');
+      name.textContent = (index + 1) + '. ' + group.name;
 
       const path = document.createElement('span');
       path.className = 'mesh-annotation-path';
-      path.textContent = record.displayPath;
+      path.textContent = group.displayPath;
 
       const status = document.createElement('span');
       status.className = 'mesh-annotation-status';
 
       copy.append(name, path);
       button.append(copy, status);
-      button.addEventListener('click', () => this._handlePanelRecordClick(record));
+      button.addEventListener('click', () => this._handlePanelRecordClick(this._preferredRecord(group)));
       this.list.appendChild(button);
 
-      record.row = button;
-      record.status = status;
-      record.searchText = ((record.mesh.name || '') + ' ' + record.displayPath).toLowerCase();
-      this._refreshRecord(record);
+      group.searchText = [
+        group.name, group.object.name, group.displayPath,
+        ...group.records.map((record) => record.mesh.name),
+      ].join(' ').toLowerCase();
+      group.records.forEach((record) => {
+        record.row = button;
+        record.status = status;
+        record.searchText = group.searchText;
+        this._refreshRecord(record);
+      });
     });
   }
 
   _refreshRecord(record) {
     if (!record.row) return;
     const annotation = this.annotations[record.path] || null;
-    record.row.classList.toggle('selected', this.activeRecord === record);
-    record.row.setAttribute('aria-pressed', String(this.activeRecord === record));
-    record.status.textContent = annotation ? 'SAVED' : 'ADD';
-    record.status.classList.toggle('saved', Boolean(annotation));
+    const group = record.objectGroup;
+    const selected = this.activeRecord?.objectGroup === group;
+    const saved = group.records.some((part) => this.annotations[part.path]);
+    record.row.classList.toggle('selected', selected);
+    record.row.setAttribute('aria-pressed', String(selected));
+    record.status.textContent = saved ? 'SAVED' : 'ADD';
+    record.status.classList.toggle('saved', saved);
     if (record.marker) {
       if (annotation) {
-        record.marker.textContent = 'i  ' + (annotation.title || annotation.subtitle || record.mesh.name || 'Information');
+        record.marker.textContent = 'i  ' + (annotation.title || annotation.subtitle || group.name || 'Information');
         record.marker.title = annotation.title || annotation.subtitle || 'View object information';
         record.marker.hidden = !this.showLabels;
       } else {
@@ -568,18 +618,19 @@ export class MeshAnnotationController {
 
   _filterRows() {
     const query = this.searchInput.value.trim().toLowerCase();
+    const objectRecords = this.objectGroups.map((group) => this._preferredRecord(group));
     const matchingRecords = query
-      ? this.records.filter((record) => record.searchText.includes(query))
-      : this.records;
+      ? objectRecords.filter((record) => record.searchText.includes(query))
+      : objectRecords;
 
-    const matchingSet = new Set(matchingRecords);
-    this.records.forEach((record) => {
-      record.row.hidden = !matchingSet.has(record);
+    const matchingSet = new Set(matchingRecords.map((record) => record.objectGroup));
+    objectRecords.forEach((record) => {
+      record.row.hidden = !matchingSet.has(record.objectGroup);
     });
 
     if (this.countLabel) {
       this.countLabel.textContent = query
-        ? matchingRecords.length + ' matching / ' + this.records.length + ' meshes'
+        ? matchingRecords.length + ' matching / ' + this.objectGroups.length + ' objects'
         : this._countText();
     }
 
@@ -594,17 +645,18 @@ export class MeshAnnotationController {
     if (!query || !matchingRecords.length) return null;
 
     const exactName = matchingRecords.find(
-      (record) => (record.mesh.name || '').trim().toLowerCase() === query,
+      (record) => [record.objectGroup.name, record.objectGroup.object.name]
+        .some((name) => name.trim().toLowerCase() === query),
     );
     if (exactName) return exactName;
 
     const exactPath = matchingRecords.find(
-      (record) => record.displayPath.trim().toLowerCase() === query,
+      (record) => record.objectGroup.displayPath.trim().toLowerCase() === query,
     );
     if (exactPath) return exactPath;
 
     return matchingRecords.find(
-      (record) => (record.mesh.name || '').trim().toLowerCase().startsWith(query),
+      (record) => record.objectGroup.name.trim().toLowerCase().startsWith(query),
     ) || matchingRecords[0];
   }
 
@@ -625,14 +677,16 @@ export class MeshAnnotationController {
     const query = this.searchInput.value.trim().toLowerCase();
     if (!query) return;
 
-    const matchingRecords = this.records.filter((record) => record.searchText.includes(query));
+    const matchingRecords = this.objectGroups
+      .filter((group) => group.searchText.includes(query))
+      .map((group) => this._preferredRecord(group));
     const record = this._findBestSearchMatch(query, matchingRecords);
     if (record) this._selectSearchMatch(record);
   }
 
   _countText() {
-    const saved = this.annotatedRecords.length;
-    return this.records.length + ' meshes · ' + saved + ' annotated';
+    const saved = new Set(this.annotatedRecords.map((record) => record.objectGroup)).size;
+    return this.objectGroups.length + ' objects · ' + saved + ' annotated';
   }
 
   _updateCounts() {
@@ -653,7 +707,7 @@ export class MeshAnnotationController {
     if (!this.focusSnapshot) {
       this.focusSnapshot = this.viewer.captureCameraView();
     }
-    this.viewer.focusCameraOnObject(record.mesh, 850);
+    this.viewer.focusCameraOnObject(record.objectGroup.object, 850);
   }
 
   _restoreCameraFocus() {
@@ -686,7 +740,7 @@ export class MeshAnnotationController {
       this._closeEditor();
     }
 
-    if (notify) this.onSelect(record.mesh);
+    if (notify) this.onSelect(record.objectGroup.object);
   }
 
   selectFromViewport(mesh) {
@@ -697,11 +751,13 @@ export class MeshAnnotationController {
       return;
     }
 
-    const record = this.records.find((item) => item.mesh === mesh);
-    if (!record) {
+    const part = this.recordByMesh.get(mesh);
+    const group = part?.objectGroup || this.groupByObject.get(mesh);
+    if (!group) {
       this._deselect();
       return;
     }
+    const record = this._preferredRecord(group, part);
 
     // Viewport selection updates the annotation list but does not open the editor.
     this._hidePreview(false);
@@ -725,15 +781,16 @@ export class MeshAnnotationController {
       this._deselect();
       return;
     }
-    const record = this.records.find((item) => item.mesh === mesh);
-    if (!record) return;
-    this._activate(record, openEditor, false);
+    const part = this.recordByMesh.get(mesh);
+    const group = part?.objectGroup || this.groupByObject.get(mesh);
+    if (!group) return;
+    this._activate(this._preferredRecord(group, part), openEditor, false);
   }
 
   _openEditor(record) {
     this.activeRecord = record;
     const annotation = this.annotations[record.path] || {};
-    this.editorMeshLabel.textContent = this._displayPath(record.mesh);
+    this.editorMeshLabel.textContent = record.objectGroup.displayPath;
     this.titleInput.value = annotation.title || '';
     this.subtitleInput.value = annotation.subtitle || '';
     this.detailsInput.value = annotation.details || '';
@@ -943,7 +1000,7 @@ export class MeshAnnotationController {
     if (!annotation) return;
 
     this.previewRecord = record;
-    this.previewTitle.textContent = annotation.title || record.mesh.name || 'Object information';
+    this.previewTitle.textContent = annotation.title || record.objectGroup.name || 'Object information';
     this.previewSubtitle.textContent = annotation.subtitle || '';
     this.previewSubtitle.hidden = !annotation.subtitle;
     this.previewDetails.textContent = annotation.details || '';
