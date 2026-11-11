@@ -3,6 +3,7 @@ import WebGL from 'three/addons/capabilities/WebGL.js';
 import { Viewer } from './viewer.js';
 import { MeshOpacityController } from './mesh-opacity.js';
 import { MeshAnnotationController } from './mesh-annotations.js';
+import { MeshAppearanceController } from './mesh-appearance.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -35,6 +36,7 @@ class App {
 		this.viewer = null;
 		this.viewerEl = null;
 		this.meshOpacityController = null;
+		this.meshAppearanceController = null;
 		this.meshAnnotationController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
@@ -116,6 +118,8 @@ class App {
 			this.meshOpacityController.dispose();
 			this.meshOpacityController = null;
 		}
+		this.meshAppearanceController?.dispose();
+		this.meshAppearanceController = null;
 
 		if (this.viewer) this.viewer.clear();
 
@@ -135,7 +139,10 @@ class App {
 				// models and files dropped into the viewer.
 				const loadedScene = window.VIEWER.scene || gltf?.scene || gltf?.scenes?.[0];
 				if (loadedScene) {
-					this.meshOpacityController = new MeshOpacityController(loadedScene);
+					this.meshAppearanceController = new MeshAppearanceController(loadedScene);
+					this.meshOpacityController = new MeshOpacityController(loadedScene, {
+						appearance: this.meshAppearanceController,
+					});
 					const annotationModelKey =
 						typeof rootFile === 'string'
 							? rootFile
@@ -151,6 +158,7 @@ class App {
 						annotationModelKey,
 						(mesh) => this.viewer?.selectMesh(mesh),
 						gltf.parser?.associations,
+						this.meshAppearanceController,
 					);
 
 					this.viewer.setMeshPickHandler((mesh) =>

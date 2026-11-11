@@ -1,4 +1,5 @@
 import { registerMeshPanel } from './mesh-panel-layout.js';
+import { MeshAppearanceController } from './mesh-appearance.js';
 
 /**
  * Per-mesh opacity controller for donmccurdy/three-gltf-viewer.
@@ -12,6 +13,8 @@ export class MeshOpacityController {
   constructor(root, options = {}) {
     this.root = root;
     this.options = options;
+    this.appearance = options.appearance || new MeshAppearanceController(root);
+    this.ownsAppearance = !options.appearance;
     this.records = [];
     this.disposed = false;
 
@@ -27,9 +30,6 @@ export class MeshOpacityController {
 
       this.records.push({
         mesh: object,
-        originalMaterial: object.material,
-        workingMaterials: null,
-        originalProperties: null,
         row: null,
         searchText: '',
       });
@@ -312,46 +312,13 @@ export class MeshOpacityController {
     });
   }
 
-  _ensureIndependentMaterials(record) {
-    if (record.workingMaterials) return;
-
-    const originals = Array.isArray(record.originalMaterial)
-      ? record.originalMaterial
-      : [record.originalMaterial];
-
-    record.workingMaterials = originals.map((material) => material.clone());
-    record.originalProperties = record.workingMaterials.map((material) => ({
-      opacity: material.opacity,
-      transparent: material.transparent,
-      depthWrite: material.depthWrite,
-    }));
-
-    record.mesh.material = Array.isArray(record.originalMaterial)
-      ? record.workingMaterials
-      : record.workingMaterials[0];
-  }
-
   _setOpacity(record, percentage) {
-    this._ensureIndependentMaterials(record);
-    const factor = Math.max(0, Math.min(1, percentage / 100));
-
-    record.workingMaterials.forEach((material, index) => {
-      const original = record.originalProperties[index];
-      material.opacity = original.opacity * factor;
-      material.transparent = original.transparent || factor < 0.999;
-      material.depthWrite = factor < 0.999 ? false : original.depthWrite;
-      material.needsUpdate = true;
-    });
+    this.appearance.setOpacity(record.mesh, percentage);
   }
 
   restoreAll() {
     this.records.forEach((record) => {
-      if (record.workingMaterials) {
-        record.mesh.material = record.originalMaterial;
-        record.workingMaterials.forEach((material) => material.dispose());
-        record.workingMaterials = null;
-        record.originalProperties = null;
-      }
+      this.appearance.setOpacity(record.mesh, 100);
       if (record.row) {
         const slider = record.row.querySelector('.mesh-opacity-range');
         const value = record.row.querySelector('.mesh-opacity-value');
@@ -387,6 +354,7 @@ export class MeshOpacityController {
   dispose() {
     if (this.disposed) return;
     this.restoreAll();
+    if (this.ownsAppearance) this.appearance.dispose();
     this.layoutRegistration?.unregister();
     this.panel.remove();
     this.toggleButton.remove();

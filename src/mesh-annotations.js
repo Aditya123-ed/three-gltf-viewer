@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { registerMeshPanel } from './mesh-panel-layout.js';
+import { ObjectColorController } from './object-colors.js';
 
 const STYLE_ID = 'mesh-annotation-controller-styles';
 const FORMAT = 'three-gltf-viewer-annotations';
@@ -63,7 +64,7 @@ function uniqueRecords(records, keyOf) {
 }
 
 export class MeshAnnotationController {
-  constructor(root, viewer, modelKey, onSelect = () => {}, associations = null) {
+  constructor(root, viewer, modelKey, onSelect = () => {}, associations = null, appearance = null) {
     this.root = root;
     this.viewer = viewer;
     this.modelKey = String(modelKey || 'uploaded-model');
@@ -94,6 +95,12 @@ export class MeshAnnotationController {
     this.annotatedRecords = this.records.filter((record) => Boolean(this.annotations[record.path]));
     this._injectStyles();
     this._createUI();
+    if (appearance) {
+      this.colorController = new ObjectColorController(
+        this.panel.querySelector('.mesh-annotation-header'), this.objectGroups, appearance,
+        this.modelKey, (object) => this._stablePath(object), () => this._updateCounts(),
+      );
+    }
     this._renderRows();
     this._createOverlay();
     this._bindEvents();
@@ -282,6 +289,7 @@ export class MeshAnnotationController {
       if (this.disposed) return;
       const shared = this._parseAnnotationPayload(payload);
       this.sharedAnnotations = shared.annotations;
+      this.colorController?.loadShared(payload.objectColors);
       this._syncAnnotationRecords();
       if (shared.unmatched) {
         this._setStatus(shared.unmatched + ' shared annotation(s) could not be matched to this model.');
@@ -325,7 +333,7 @@ export class MeshAnnotationController {
       '.mesh-annotation-panel *,.mesh-annotation-toggle *,.mesh-annotation-editor *{box-sizing:border-box}',
       '.mesh-annotation-panel[hidden],.mesh-annotation-editor[hidden],.mesh-annotation-preview[hidden]{display:none!important}',
       '.mesh-annotation-panel{z-index:100001;display:flex;flex-direction:column;overflow:hidden;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #526174;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.55);font-size:13px}',
-      '.mesh-annotation-header{flex:0 0 auto;padding:11px 13px;border-bottom:1px solid #394553}',
+      '.mesh-annotation-header{flex:0 0 auto;max-height:65%;overflow-y:auto;padding:11px 13px;border-bottom:1px solid #394553}',
       '.mesh-annotation-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:15px;font-weight:700}',
       '.mesh-annotation-count{margin-top:5px;color:#aab5c3;font-size:11px}',
       '.mesh-annotation-search{display:block;width:100%;margin-top:9px;padding:8px 10px;color:#fff;background:#242c37;border:1px solid #526174;border-radius:5px;outline:none;font:inherit}',
@@ -336,6 +344,14 @@ export class MeshAnnotationController {
       '.mesh-annotation-button.primary{color:#fff;background:#17618d;border-color:#3887b7}',
       '.mesh-annotation-button.primary:hover{background:#1e76a9}',
       '.mesh-annotation-button:disabled{opacity:.4;cursor:not-allowed}',
+      '.object-color-controls{min-width:0;margin:10px 0 0;padding:8px;border:1px solid #526174;border-radius:6px}',
+      '.object-color-controls legend{padding:0 4px;color:#c8d3df;font-size:11px;font-weight:700}',
+      '.object-color-selected{margin-bottom:7px;font-size:11px;overflow-wrap:anywhere}',
+      '.object-color-inputs{display:flex;align-items:center;gap:6px;margin-bottom:7px}',
+      '.object-color-inputs input[type=color]{flex:none;width:34px;height:34px;padding:2px;border:1px solid #526174;border-radius:4px;background:#202833;cursor:pointer}',
+      '.object-color-hex{flex:1;min-width:0;width:80px;padding:7px 5px;font-size:11px}',
+      '.object-color-controls input:disabled{opacity:.4;cursor:not-allowed}',
+      '.object-color-message{font-size:11px;line-height:1.4;color:#a9d8f7}',
       '.mesh-annotation-close{padding:3px 8px;font-size:16px}',
       '.mesh-annotation-list{min-height:0;flex:1 1 auto;overflow-y:auto;padding:5px 9px 9px;overscroll-behavior:contain}',
       '.mesh-annotation-item{display:flex;width:100%;align-items:flex-start;gap:8px;padding:8px 7px;color:#edf2f7;background:transparent;border:0;border-bottom:1px solid #303945;border-radius:4px;text-align:left;cursor:pointer}',
@@ -412,7 +428,7 @@ export class MeshAnnotationController {
       '    <button type="button" class="mesh-annotation-button mesh-annotation-close mesh-annotation-hide" aria-label="Hide panel" title="Hide panel">×</button>',
       '  </div>',
       '  <div class="mesh-annotation-count"></div>',
-      '  <input class="mesh-annotation-search" type="search" placeholder="Find a mesh to annotate…" aria-label="Search meshes">',
+      '  <input class="mesh-annotation-search" type="search" placeholder="Find an object…" aria-label="Search meshes">',
       '  <div class="mesh-annotation-toolbar">',
       '    <button type="button" class="mesh-annotation-button mesh-annotation-export">Export</button>',
       '    <button type="button" class="mesh-annotation-button mesh-annotation-import">Import</button>',
@@ -691,7 +707,7 @@ export class MeshAnnotationController {
 
   _updateCounts() {
     this.countLabel.textContent = this._countText();
-    this.exportButton.disabled = Object.keys(this.annotations).length === 0;
+    this.exportButton.disabled = Object.keys(this.annotations).length === 0 && !this.colorController?.exportEntries().length;
   }
 
   _handlePanelRecordClick(record) {
@@ -728,6 +744,7 @@ export class MeshAnnotationController {
     }
 
     this.activeRecord = record;
+    this.colorController?.setSelection(record.objectGroup);
     this.records.forEach((item) => this._refreshRecord(item));
     if (record.row) record.row.scrollIntoView({ block: 'nearest' });
 
@@ -770,6 +787,7 @@ export class MeshAnnotationController {
     this._hidePreview(false);
     this._closeEditor();
     this.activeRecord = null;
+    this.colorController?.setSelection(null);
     this.records.forEach((record) => this._refreshRecord(record));
     this.onSelect(null);
     this._restoreCameraFocus();
@@ -1030,13 +1048,15 @@ export class MeshAnnotationController {
 
   exportAnnotations() {
     const entries = Object.values(this.annotations);
-    if (!entries.length) return;
+    const objectColors = this.colorController?.exportEntries() || [];
+    if (!entries.length && !objectColors.length) return;
     const payload = {
       format: FORMAT,
       version: 1,
       modelKey: this.modelKey,
       exportedAt: new Date().toISOString(),
       annotations: entries,
+      objectColors,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1047,7 +1067,7 @@ export class MeshAnnotationController {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    this._setStatus('Annotation file exported.');
+    this._setStatus('Annotations and object colors exported.');
   }
 
   _parseAnnotationPayload(payload) {
@@ -1087,11 +1107,16 @@ export class MeshAnnotationController {
       const payload = JSON.parse(await file.text());
       if (this.disposed) return;
       const { annotations, imported, unmatched } = this._parseAnnotationPayload(payload);
+      const colors = this.colorController && payload.objectColors !== undefined
+        ? this.colorController.parse(payload.objectColors) : null;
       Object.assign(this.localAnnotations, annotations);
+      if (colors) this.colorController.importColors(colors);
       this._closeEditor();
       this._hidePreview(false);
       this._syncAnnotationRecords();
-      await this._persist(imported + ' annotations imported' + (unmatched ? ' · ' + unmatched + ' unmatched' : '') + '.');
+      const unmatchedCount = unmatched + (colors?.unmatched || 0);
+      await this._persist(imported + ' annotations' + (colors ? ' · ' + colors.colors.size + ' object colors' : '') +
+        ' imported' + (unmatchedCount ? ' · ' + unmatchedCount + ' unmatched' : '') + '.');
     } catch (error) {
       window.alert('Unable to import annotations: ' + error.message);
     } finally {
@@ -1129,6 +1154,7 @@ export class MeshAnnotationController {
     this.disposed = true;
     this.sharedRequest?.abort();
     this.annotationDb?.close();
+    this.colorController?.dispose();
     if (this.frameId !== null) window.cancelAnimationFrame(this.frameId);
     document.removeEventListener('keydown', this._onKeyDown);
     if (this.layoutRegistration) this.layoutRegistration.unregister();
