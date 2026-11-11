@@ -1,0 +1,38 @@
+{
+  "generator": "Blender 5.1.2",
+  "skyModel": "MULTIPLE_SCATTERING",
+  "sunElevation": 30,
+  "sunRotation": -30,
+  "sunAngularDiameter": 10,
+  "altitude": 100,
+  "air": 1,
+  "aerosols": 1,
+  "ozone": 5,
+  "gamma": 0.9,
+  "worldStrength": 1,
+  "groundAlbedo": 0.30000001192092896,
+  "normalization": 0.08103279019597971,
+  "sunDirection": [
+    -0.4330127018922193,
+    0.49999999999999994,
+    -0.7500000000000001
+  ],
+  "measuredSunDirection": [
+    -0.43260547441083286,
+    0.5013090029062921,
+    -0.7493609191270102
+  ],
+  "sunIntensity": 3.7722379921353473,
+  "sunColorLinear": [
+    1.0,
+    0.8839989495706897,
+    0.8106270643475154
+  ],
+  "skyHorizontalIrradiance": [
+    0.357354516612989,
+    0.6696944449587094,
+    1.3490959762043797
+  ],
+  "environment": "/environments/substation-daylight.exr",
+  "note": "Sky-only environment plus a separate shadowed sun. Display exposure is an approximation."
+}

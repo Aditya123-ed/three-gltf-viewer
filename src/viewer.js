@@ -1,12 +1,10 @@
 import {
-	AmbientLight,
 	AnimationMixer,
 	AxesHelper,
 	Box3,
 	BoxHelper,
 	Cache,
 	Color,
-	DirectionalLight,
 	GridHelper,
 	HemisphereLight,
 	LoaderUtils,
@@ -23,6 +21,9 @@ import {
 	WebGLRenderer,
 	LinearToneMapping,
 	ACESFilmicToneMapping,
+	AgXToneMapping,
+	PCFShadowMap,
+	SRGBColorSpace,
 } from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -36,6 +37,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GUI } from 'dat.gui';
 
 import { environments } from './environments.js';
+import { DAYLIGHT, DAYLIGHT_NAME, createDaylightLights, daylightSunColor, fitDaylightShadow } from './daylight.js';
 
 const DEFAULT_CAMERA = '[default]';
 
@@ -60,6 +62,8 @@ export class Viewer {
 		this.options = options;
 
 		this.lights = [];
+		this.environmentCache = new Map();
+		this.environmentRequestId = 0;
 		this.content = null;
 		this.selectionHelper = null;
 		this.selectedMesh = null;
@@ -73,8 +77,8 @@ export class Viewer {
 			environment:
 				options.preset === Preset.ASSET_GENERATOR
 					? environments.find((e) => e.id === 'footprint-court').name
-					: environments[1].name,
-			background: false,
+					: DAYLIGHT_NAME,
+			background: options.preset !== Preset.ASSET_GENERATOR,
 			playbackSpeed: 1.0,
 			actionStates: {},
 			camera: DEFAULT_CAMERA,
@@ -86,11 +90,13 @@ export class Viewer {
 			// Lights
 			punctualLights: true,
 			exposure: 0.0,
-			toneMapping: LinearToneMapping,
-			ambientIntensity: 0.3,
+			toneMapping: options.preset === Preset.ASSET_GENERATOR ? LinearToneMapping : AgXToneMapping,
+			environmentIntensity: 1,
+			shadows: options.preset !== Preset.ASSET_GENERATOR,
+			ambientIntensity: 0.02,
 			ambientColor: '#FFFFFF',
-			directIntensity: 0.8 * Math.PI, // TODO(#116)
-			directColor: '#FFFFFF',
+			directIntensity: DAYLIGHT.sunIntensity,
+			directColor: '#' + daylightSunColor(),
 			bgColor: '#191919',
 
 			pointSize: 1.0,
@@ -117,6 +123,12 @@ export class Viewer {
 		this.renderer.setClearColor(0xcccccc);
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 		this.renderer.setSize(el.clientWidth, el.clientHeight);
+		this.renderer.outputColorSpace = SRGBColorSpace;
+		this.renderer.shadowMap.enabled = this.state.shadows;
+		this.renderer.shadowMap.type = PCFShadowMap;
+		// The sun and model are normally static. Orbiting should not re-render
+		// hundreds of shadow casters on every frame.
+		this.renderer.shadowMap.autoUpdate = false;
 
 		this.pmremGenerator = new PMREMGenerator(this.renderer);
 		this.pmremGenerator.compileEquirectangularShader();
@@ -191,6 +203,7 @@ export class Viewer {
 
 	render() {
 		if (this.selectionHelper) this.selectionHelper.update();
+		if (this.mixer) this.renderer.shadowMap.needsUpdate = true;
 		this.renderer.render(this.scene, this.activeCamera);
 		if (this.state.grid) {
 			this.axesCamera.position.copy(this.defaultCamera.position);
@@ -507,6 +520,11 @@ export class Viewer {
 
 		this.scene.add(object);
 		this.content = object;
+		this.content.traverse((node) => {
+			if (!node.isMesh) return;
+			node.castShadow = true;
+			node.receiveShadow = true;
+		});
 
 		this.state.punctualLights = true;
 
@@ -519,6 +537,7 @@ export class Viewer {
 		this.setClips(clips);
 
 		this.updateLights();
+		this.invalidateShadows();
 		this.updateGUI();
 		this.updateEnvironment();
 		this.updateDisplay();
@@ -627,13 +646,24 @@ export class Viewer {
 
 		this.renderer.toneMapping = Number(state.toneMapping);
 		this.renderer.toneMappingExposure = Math.pow(2, state.exposure);
+		this.scene.environmentIntensity = state.environmentIntensity;
+		this.renderer.shadowMap.enabled = state.shadows;
 
 		if (lights.length === 2) {
 			lights[0].intensity = state.ambientIntensity;
 			lights[0].color.set(state.ambientColor);
 			lights[1].intensity = state.directIntensity;
 			lights[1].color.set(state.directColor);
+			if (lights[1].userData.daylight) {
+				lights[1].castShadow = state.shadows;
+				fitDaylightShadow(lights[1], this.content);
+			}
 		}
+		this.invalidateShadows();
+	}
+
+	invalidateShadows() {
+		this.renderer.shadowMap.needsUpdate = true;
 	}
 
 	addLights() {
@@ -647,31 +677,34 @@ export class Viewer {
 			return;
 		}
 
-		const light1 = new AmbientLight(state.ambientColor, state.ambientIntensity);
-		light1.name = 'ambient_light';
-		this.defaultCamera.add(light1);
-
-		const light2 = new DirectionalLight(state.directColor, state.directIntensity);
-		light2.position.set(0.5, 0, 0.866); // ~60º
-		light2.name = 'main_light';
-		this.defaultCamera.add(light2);
-
-		this.lights.push(light1, light2);
+		this.lights.push(...createDaylightLights(this.scene, this.content, state, this.renderer));
 	}
 
 	removeLights() {
-		this.lights.forEach((light) => light.parent.remove(light));
+		this.lights.forEach((light) => {
+			light.removeFromParent();
+			if (light.userData.daylight) light.target.removeFromParent();
+			light.dispose();
+		});
 		this.lights.length = 0;
 	}
 
 	updateEnvironment() {
+		const requestId = ++this.environmentRequestId;
 		const environment = environments.filter(
 			(entry) => entry.name === this.state.environment,
 		)[0];
 
 		this.getCubeMapTexture(environment).then(({ envMap }) => {
+			if (requestId !== this.environmentRequestId) return;
 			this.scene.environment = envMap;
+			this.scene.environmentIntensity = this.state.environmentIntensity;
 			this.scene.background = this.state.background ? envMap : this.backgroundColor;
+		}).catch((error) => {
+			if (requestId !== this.environmentRequestId) return;
+			console.error('Environment unavailable; using neutral lighting.', error);
+			this.scene.environment = this.neutralEnvironment;
+			this.scene.background = this.backgroundColor;
 		});
 	}
 
@@ -688,12 +721,13 @@ export class Viewer {
 			return Promise.resolve({ envMap: null });
 		}
 
-		return new Promise((resolve, reject) => {
+		if (this.environmentCache.has(id)) return this.environmentCache.get(id);
+		const pending = new Promise((resolve, reject) => {
 			new EXRLoader().load(
 				path,
 				(texture) => {
 					const envMap = this.pmremGenerator.fromEquirectangular(texture).texture;
-					this.pmremGenerator.dispose();
+					texture.dispose();
 
 					resolve({ envMap });
 				},
@@ -701,6 +735,9 @@ export class Viewer {
 				reject,
 			);
 		});
+		this.environmentCache.set(id, pending);
+		pending.catch(() => this.environmentCache.delete(id));
+		return pending;
 	}
 
 	updateDisplay() {
@@ -812,13 +849,16 @@ export class Viewer {
 		[
 			lightFolder.add(this.state, 'toneMapping', {
 				Linear: LinearToneMapping,
+				AgX: AgXToneMapping,
 				'ACES Filmic': ACESFilmicToneMapping,
 			}),
 			lightFolder.add(this.state, 'exposure', -10, 10, 0.01),
+			lightFolder.add(this.state, 'environmentIntensity', 0, 3, 0.01).name('Sky intensity'),
+			lightFolder.add(this.state, 'shadows').name('Shadows'),
 			lightFolder.add(this.state, 'punctualLights').listen(),
 			lightFolder.add(this.state, 'ambientIntensity', 0, 2),
 			lightFolder.addColor(this.state, 'ambientColor'),
-			lightFolder.add(this.state, 'directIntensity', 0, 4), // TODO(#116)
+			lightFolder.add(this.state, 'directIntensity', 0, 10).name('Sun intensity'),
 			lightFolder.addColor(this.state, 'directColor'),
 		].forEach((ctrl) => ctrl.onChange(() => this.updateLights()));
 

@@ -1,3 +1,5 @@
+import { DAYLIGHT, DAYLIGHT_NAME } from './daylight.js';
+
 export const environments = [
 	{
 		id: '',
@@ -8,6 +10,12 @@ export const environments = [
 		id: 'neutral', // THREE.RoomEnvironment
 		name: 'Neutral',
 		path: null,
+	},
+	{
+		id: 'substation-daylight',
+		name: DAYLIGHT_NAME,
+		path: DAYLIGHT.environment,
+		format: '.exr',
 	},
 	{
 		id: 'venice-sunset',

@@ -139,7 +139,7 @@ class App {
 				// models and files dropped into the viewer.
 				const loadedScene = window.VIEWER.scene || gltf?.scene || gltf?.scenes?.[0];
 				if (loadedScene) {
-					this.meshAppearanceController = new MeshAppearanceController(loadedScene);
+					this.meshAppearanceController = new MeshAppearanceController(loadedScene, () => this.viewer.invalidateShadows());
 					this.meshOpacityController = new MeshOpacityController(loadedScene, {
 						appearance: this.meshAppearanceController,
 					});
