@@ -13,7 +13,8 @@ function updateMeshPanelLayout() {
     item.toggleButton.style.top = `${72 + item.order * 44}px`;
   });
 
-  const panelStart = 174;
+  const lastButton = Math.max(1, ...registrations.map((item) => item.order));
+  const panelStart = Math.max(174, 72 + lastButton * 44 + 38 + 14);
   const gap = 10;
   const available = Math.max(150, window.innerHeight - panelStart - 14);
   const panelHeight = Math.max(

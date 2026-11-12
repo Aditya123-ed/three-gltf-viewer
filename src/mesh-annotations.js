@@ -290,6 +290,10 @@ export class MeshAnnotationController {
       const shared = this._parseAnnotationPayload(payload);
       this.sharedAnnotations = shared.annotations;
       this.colorController?.loadShared(payload.objectColors);
+      if (payload.currentFlow !== undefined && this.flowController) {
+        try { this.flowController.loadSharedSettings(payload.currentFlow); }
+        catch (error) { console.warn('[Current Flow] Unable to load shared flow settings.', error); }
+      }
       this._syncAnnotationRecords();
       if (shared.unmatched) {
         this._setStatus(shared.unmatched + ' shared annotation(s) could not be matched to this model.');
@@ -707,7 +711,7 @@ export class MeshAnnotationController {
 
   _updateCounts() {
     this.countLabel.textContent = this._countText();
-    this.exportButton.disabled = Object.keys(this.annotations).length === 0 && !this.colorController?.exportEntries().length;
+    this.exportButton.disabled = Object.keys(this.annotations).length === 0 && !this.colorController?.exportEntries().length && !this.flowController?.hasRoutes;
   }
 
   _handlePanelRecordClick(record) {
@@ -1049,7 +1053,8 @@ export class MeshAnnotationController {
   exportAnnotations() {
     const entries = Object.values(this.annotations);
     const objectColors = this.colorController?.exportEntries() || [];
-    if (!entries.length && !objectColors.length) return;
+    const currentFlow = this.flowController?.exportSettings();
+    if (!entries.length && !objectColors.length && !this.flowController?.hasRoutes) return;
     const payload = {
       format: FORMAT,
       version: 1,
@@ -1057,6 +1062,7 @@ export class MeshAnnotationController {
       exportedAt: new Date().toISOString(),
       annotations: entries,
       objectColors,
+      ...(currentFlow ? { currentFlow } : {}),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1067,7 +1073,7 @@ export class MeshAnnotationController {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    this._setStatus('Annotations and object colors exported.');
+    this._setStatus('Properties and flow settings exported.');
   }
 
   _parseAnnotationPayload(payload) {
@@ -1109,13 +1115,16 @@ export class MeshAnnotationController {
       const { annotations, imported, unmatched } = this._parseAnnotationPayload(payload);
       const colors = this.colorController && payload.objectColors !== undefined
         ? this.colorController.parse(payload.objectColors) : null;
+      const flow = this.flowController && payload.currentFlow !== undefined
+        ? this.flowController.parseSettings(payload.currentFlow) : null;
       Object.assign(this.localAnnotations, annotations);
       if (colors) this.colorController.importColors(colors);
+      if (flow) this.flowController.importSettings(flow);
       this._closeEditor();
       this._hidePreview(false);
       this._syncAnnotationRecords();
       const unmatchedCount = unmatched + (colors?.unmatched || 0);
-      await this._persist(imported + ' annotations' + (colors ? ' · ' + colors.colors.size + ' object colors' : '') +
+      await this._persist(imported + ' annotations' + (colors ? ' · ' + colors.colors.size + ' object colors' : '') + (flow ? ' · flow settings' : '') +
         ' imported' + (unmatchedCount ? ' · ' + unmatchedCount + ' unmatched' : '') + '.');
     } catch (error) {
       window.alert('Unable to import annotations: ' + error.message);

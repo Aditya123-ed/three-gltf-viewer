@@ -4,6 +4,7 @@ import { Viewer } from './viewer.js';
 import { MeshOpacityController } from './mesh-opacity.js';
 import { MeshAnnotationController } from './mesh-annotations.js';
 import { MeshAppearanceController } from './mesh-appearance.js';
+import { CurrentFlowController } from './current-flow.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -38,6 +39,7 @@ class App {
 		this.meshOpacityController = null;
 		this.meshAppearanceController = null;
 		this.meshAnnotationController = null;
+		this.currentFlowController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
 		this.inputEl = el.querySelector('#file-input');
@@ -114,6 +116,8 @@ class App {
 			this.meshAnnotationController.dispose();
 			this.meshAnnotationController = null;
 		}
+		this.currentFlowController?.dispose();
+		this.currentFlowController = null;
 		if (this.meshOpacityController) {
 			this.meshOpacityController.dispose();
 			this.meshOpacityController = null;
@@ -160,6 +164,11 @@ class App {
 						gltf.parser?.associations,
 						this.meshAppearanceController,
 					);
+					this.currentFlowController = new CurrentFlowController(
+						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,
+					);
+					this.meshAnnotationController.flowController = this.currentFlowController;
+					this.meshAnnotationController._updateCounts();
 
 					this.viewer.setMeshPickHandler((mesh) =>
 						this.meshAnnotationController?.selectFromViewport(mesh),

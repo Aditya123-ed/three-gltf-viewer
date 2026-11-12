@@ -103,6 +103,7 @@ export class Viewer {
 		};
 
 		this.prevTime = 0;
+		this.frameCallbacks = new Set();
 
 		this.stats = new Stats();
 		this.stats.dom.height = '48px';
@@ -196,9 +197,15 @@ export class Viewer {
 		this.controls.update();
 		this.stats.update();
 		this.mixer && this.mixer.update(dt);
+		this.frameCallbacks.forEach((callback) => callback(dt));
 		this.render();
 
 		this.prevTime = time;
+	}
+
+	addFrameCallback(callback) {
+		this.frameCallbacks.add(callback);
+		return () => this.frameCallbacks.delete(callback);
 	}
 
 	render() {
