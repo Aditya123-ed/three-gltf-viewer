@@ -334,7 +334,7 @@ export class MeshAnnotationController {
       '.object-transparency-control input:disabled{opacity:.4;cursor:default}',
       '.object-transparency-value{width:36px;text-align:right;font-size:11px;color:#c5e6ff;font-variant-numeric:tabular-nums}',
       '.object-transparency-scale{display:flex;justify-content:space-between;margin:3px 45px 7px 0;color:#aab5c3;font-size:10px}',
-      '.object-transparency-actions{display:flex;gap:7px;font-size:11px}',
+      '.object-color-actions,.object-transparency-actions{display:flex;flex-wrap:wrap;gap:7px;font-size:11px}',
       '.object-transparency-hint[hidden]{display:none!important}',
       '.mesh-annotation-close{padding:3px 8px;font-size:16px}',
       '.mesh-annotation-list{min-height:0;flex:1 1 auto;overflow-y:auto;padding:5px 9px 9px;overscroll-behavior:contain}',

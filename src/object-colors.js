@@ -22,7 +22,10 @@ export class ObjectColorController {
         <input type="text" class="mesh-annotation-field object-color-hex" value="#3498DB" maxlength="7" spellcheck="false" aria-label="Hex object color" placeholder="#3498DB" disabled>
         <button type="button" class="mesh-annotation-button primary object-color-apply" disabled>Apply color</button>
       </div>
-      <button type="button" class="mesh-annotation-button object-color-reset" disabled>Reset original</button>
+      <div class="object-color-actions">
+        <button type="button" class="mesh-annotation-button object-color-reset" disabled>Reset Original Colour</button>
+        <button type="button" class="mesh-annotation-button object-color-restore" disabled>Restore All</button>
+      </div>
       <div class="mesh-annotation-help">Saved in this browser. Export / Import includes object colors.</div>
       <div class="object-color-message" role="status" aria-live="polite"></div>`;
     container.appendChild(this.element);
@@ -31,6 +34,7 @@ export class ObjectColorController {
     this.hex = this.element.querySelector('.object-color-hex');
     this.applyButton = this.element.querySelector('.object-color-apply');
     this.resetButton = this.element.querySelector('.object-color-reset');
+    this.restoreButton = this.element.querySelector('.object-color-restore');
     this.message = this.element.querySelector('.object-color-message');
     this.picker.addEventListener('input', () => { this.hex.value = this.picker.value.toUpperCase(); });
     this.hex.addEventListener('input', () => {
@@ -41,6 +45,7 @@ export class ObjectColorController {
     });
     this.applyButton.addEventListener('click', () => this.applyColor(this.hex.value));
     this.resetButton.addEventListener('click', () => this.applyColor(null));
+    this.restoreButton.addEventListener('click', () => this.restoreAll());
     try {
       const saved = JSON.parse(window.localStorage.getItem(this.storageKey) || '[]');
       this.local = this.parse(saved).colors;
@@ -110,8 +115,10 @@ export class ObjectColorController {
     this.activeGroup = group;
     this.selected.textContent = group ? group.name : 'Select an object in the list or 3D view.';
     for (const input of [this.picker, this.hex, this.applyButton, this.resetButton]) input.disabled = !group;
-    const color = this._merged().get(group);
+    const colors = this._merged();
+    const color = colors.get(group);
     this.resetButton.disabled = !color;
+    this.restoreButton.disabled = ![...colors.values()].some(Boolean);
     this.picker.value = color || '#3498db';
     this.hex.value = this.picker.value.toUpperCase();
     this.message.textContent = '';
@@ -132,12 +139,21 @@ export class ObjectColorController {
     this.onChange();
   }
 
+  restoreAll() {
+    // Explicit original values override shared colours, including a shared
+    // preset that arrives after this action or on the next page load.
+    for (const group of this.groups) this.local.set(group, null);
+    this._applyAll();
+    this._save('Original colours restored for all objects.');
+    this.onChange();
+  }
+
   _save(message = 'Object colors imported.') {
     try {
       window.localStorage.setItem(this.storageKey, JSON.stringify(this._entries(this.local)));
       this.message.textContent = message;
     } catch (error) {
-      this.message.textContent = 'Color applied. Browser saving failed; use Export to keep a copy.';
+      this.message.textContent = 'Changes applied. Browser saving failed; use Export to keep a copy.';
     }
   }
 

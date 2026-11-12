@@ -104,6 +104,54 @@ test('browser color choices and original resets override asynchronously loaded s
   assert.equal(colors.exportEntries()[0].color, null);
 });
 
+test('Restore All restores all original material colours, preserves transparency, and persists across shared loads', () => {
+  const { a, b, parts, neighbor, material, appearance } = fixture();
+  const first = { name: a.name, object: a, records: parts.map((mesh) => ({ mesh })) };
+  const second = { name: b.name, object: b, records: [{ mesh: neighbor }] };
+  const writes = new Map(), oldWindow = globalThis.window;
+  globalThis.window = { localStorage: { setItem: (key, value) => writes.set(key, value) } };
+  let changes = 0;
+  const colors = Object.assign(Object.create(ObjectColorController.prototype), {
+    groups: [first, second], pathOf: (object) => object.name + '[0]', appearance,
+    local: new Map([[first, '#ff0000']]), shared: new Map([[second, '#00ff00']]), activeGroup: null,
+    storageKey: 'test-restore-all-colours', message: {}, setSelection() {}, onChange() { changes++; },
+  });
+  try {
+    colors._applyAll();
+    parts.forEach((mesh) => appearance.setOpacity(mesh, 40));
+    appearance.setOpacity(neighbor, 70);
+    colors.restoreAll();
+    assert.equal(changes, 1);
+    const checkOriginal = () => {
+      for (const mesh of [...parts, neighbor]) {
+        for (const restored of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          assert.equal(restored.color.getHexString(), '123456');
+          assert.equal(restored.map, material.map);
+          assert.equal(restored.metalness, 1);
+          assert.equal(restored.opacity, mesh === neighbor ? 0.42 : 0.24);
+        }
+        assert.equal(appearance.getOpacity(mesh), mesh === neighbor ? 70 : 40);
+      }
+    };
+    checkOriginal();
+    const saved = JSON.parse(writes.get(colors.storageKey));
+    assert.equal(saved.length, 2);
+    assert.ok(saved.every((entry) => entry.color === null));
+    assert.ok(colors.exportEntries().every((entry) => entry.color === null));
+    colors.loadShared([{ objectName: 'Pillar', path: 'Pillar[0]', color: '#aabbcc' }]);
+    checkOriginal();
+    // Read the saved reset entries just as a fresh controller does on reload.
+    colors.local = colors.parse(saved).colors;
+    colors._applyAll();
+    checkOriginal();
+    assert.equal(material.opacity, 0.6);
+    assert.equal(material.color.getHexString(), '123456');
+  } finally {
+    appearance.dispose();
+    globalThis.window = oldWindow;
+  }
+});
+
 test('color-only exports are enabled without creating annotation labels', () => {
   const controller = Object.assign(Object.create(MeshAnnotationController.prototype), {
     objectGroups: [], annotatedRecords: [], annotations: {}, countLabel: {}, exportButton: {},
