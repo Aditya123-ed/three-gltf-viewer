@@ -29,9 +29,16 @@ export class CurrentFlowController {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style'); style.id = STYLE_ID;
     style.textContent = `
-      .current-flow-toggle,.current-flow-panel,.current-flow-panel *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
-      .current-flow-toggle{position:fixed;z-index:100002;left:14px;min-width:132px;height:38px;display:inline-flex;align-items:center;gap:9px;padding:0 12px;color:#f4f8fc;background:rgba(45,56,69,.97);border:1px solid #6486a5;border-radius:8px;box-shadow:0 4px 14px #0007;font:600 11px/1 sans-serif;cursor:pointer;white-space:nowrap}
-      .current-flow-toggle:hover,.current-flow-toggle[aria-expanded=true]{background:#226a9a;border-color:#8bb8d9}
+      .current-flow-toggle,.current-flow-toggle *,.current-flow-panel,.current-flow-panel *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+      .current-flow-toggle{position:fixed;z-index:100002;left:14px;min-width:132px;height:38px;display:inline-flex;align-items:center;padding:0;color:#f4f8fc;background:rgba(45,56,69,.97);border:1px solid #6486a5;border-radius:8px;box-shadow:0 4px 14px #0007;font:600 11px/1 sans-serif;white-space:nowrap}
+      .current-flow-toggle.is-open{background:#226a9a;border-color:#8bb8d9}
+      .current-flow-switch{display:inline-flex;align-items:center;gap:8px;height:100%;padding:0 10px;cursor:pointer}
+      .current-flow-enabled{width:14px;height:14px;margin:0;accent-color:#69c8ff;cursor:pointer}
+      .current-flow-open{display:grid;place-items:center;align-self:stretch;min-width:32px;margin:0;padding:0 8px;color:inherit;background:transparent;border:0;border-left:1px solid #6486a5;border-radius:0 7px 7px 0;cursor:pointer}
+      .current-flow-open:hover{background:#226a9a}
+      .current-flow-open svg{width:12px;height:8px;transition:transform .15s}
+      .current-flow-open[aria-expanded=true] svg{transform:rotate(180deg)}
+      .current-flow-open:focus-visible,.current-flow-enabled:focus-visible{outline:2px solid #b5e3ff;outline-offset:2px}
       .current-flow-icon{width:16px;flex:0 0 16px;font-size:17px;line-height:1}
       .current-flow-panel{z-index:100001;display:flex;flex-direction:column;overflow:hidden;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #526174;border-radius:10px;box-shadow:0 8px 30px #0008;font-size:13px}
       .current-flow-panel[hidden]{display:none!important}
@@ -60,13 +67,22 @@ export class CurrentFlowController {
   }
 
   _createUI() {
+    this.toolbar = document.createElement('div');
+    this.toolbar.className = 'current-flow-toggle';
+    this.toolbar.setAttribute('role', 'group');
+    this.toolbar.setAttribute('aria-label', 'Current Flow toolbar');
+    this.toolbar.innerHTML = '<label class="current-flow-switch"><input type="checkbox" class="current-flow-enabled" aria-label="Show current flow"><span class="current-flow-icon" aria-hidden="true">↝</span><span>Current Flow</span></label>';
+    this.enabledInput = this.toolbar.querySelector('.current-flow-enabled');
     this.toggleButton = document.createElement('button');
-    this.toggleButton.type = 'button'; this.toggleButton.className = 'current-flow-toggle';
-    this.toggleButton.innerHTML = '<span class="current-flow-icon" aria-hidden="true">↝</span><span>Current Flow</span>';
+    this.toggleButton.type = 'button'; this.toggleButton.className = 'current-flow-open';
+    this.toggleButton.innerHTML = '<svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     this.toggleButton.setAttribute('aria-label', 'Toggle Current Flow panel');
     this.toggleButton.setAttribute('aria-expanded', 'false');
+    this.toggleButton.setAttribute('aria-controls', 'current-flow-panel');
     this.toggleButton.title = 'Show Current Flow panel';
+    this.toolbar.appendChild(this.toggleButton);
     this.panel = document.createElement('section');
+    this.panel.id = 'current-flow-panel';
     this.panel.className = 'current-flow-panel'; this.panel.hidden = true;
     this.panel.setAttribute('aria-label', 'Current Flow controls');
     this.panel.innerHTML = `
@@ -75,7 +91,6 @@ export class CurrentFlowController {
         <div class="current-flow-count"></div>
       </div>
       <div class="current-flow-body">
-        <label class="current-flow-row"><input type="checkbox" class="current-flow-enabled">Show current flow <span class="current-flow-state"></span></label>
         <label class="current-flow-row"><span class="current-flow-label">Speed <output class="current-flow-speed-value current-flow-value"></output></span><input type="range" class="current-flow-speed" aria-label="Current flow speed" min="0.1" max="10" step="0.1"></label>
         <label class="current-flow-row"><span class="current-flow-label">Color</span><span class="current-flow-color-wrap"><input type="color" class="current-flow-color" aria-label="Current flow color"><output class="current-flow-color-value current-flow-value"></output></span></label>
         <label class="current-flow-row"><span class="current-flow-label">Particle size <output class="current-flow-size-value current-flow-value"></output></span><input type="range" class="current-flow-size" aria-label="Current flow particle size" min="2" max="16" step="1"></label>
@@ -87,10 +102,10 @@ export class CurrentFlowController {
         <div class="current-flow-message" role="status" aria-live="polite"></div>
       </div>`;
     const query = (selector) => this.panel.querySelector('.current-flow-' + selector);
-    this.enabledInput = query('enabled'); this.speedInput = query('speed');
+    this.speedInput = query('speed');
     this.colorInput = query('color'); this.sizeInput = query('size');
     this.densityInput = query('density'); this.densityValue = query('density-value');
-    this.count = query('count'); this.stateLabel = query('state'); this.message = query('message');
+    this.count = query('count'); this.message = query('message');
     this.speedValue = query('speed-value'); this.colorValue = query('color-value'); this.sizeValue = query('size-value');
     this.wireInputs = new Map();
     this.wireDirections = new Map();
@@ -117,19 +132,19 @@ export class CurrentFlowController {
     this.colorInput.addEventListener('input', () => this._change({ color: this.colorInput.value }));
     this.sizeInput.addEventListener('input', () => this._change({ size: Number(this.sizeInput.value) }));
     this.densityInput.addEventListener('input', () => this._change({ density: Number(this.densityInput.value) / 100 }));
-    document.body.append(this.toggleButton, this.panel);
-    this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 2);
+    document.body.append(this.toolbar, this.panel);
+    this.layoutRegistration = registerMeshPanel(this.panel, this.toolbar, 2);
   }
 
   _refreshUI() {
     this.enabledInput.checked = this.settings.enabled;
+    this.enabledInput.title = this.settings.enabled ? 'Turn current flow off' : 'Turn current flow on';
     this.speedInput.value = String(this.settings.speed);
     this.colorInput.value = this.settings.color; this.sizeInput.value = String(this.settings.size);
     this.densityInput.value = String(Math.round(this.settings.density * 100));
     this.densityValue.textContent = Math.round(this.settings.density * 100) + '%';
     this.speedValue.textContent = this.settings.speed.toFixed(1) + ' m/s';
     this.sizeValue.textContent = this.settings.size + ' px'; this.colorValue.textContent = this.settings.color.toUpperCase();
-    this.stateLabel.textContent = this.settings.enabled ? '· On' : '· Off';
     const routes = this.particles.routes.length;
     this.count.textContent = routes ? routes + ' cable spans · ' + this.groups.length + ' wire objects' : 'No traceable open cable tubes found in this model.';
     for (const input of [this.enabledInput, this.speedInput, this.colorInput, this.sizeInput, this.densityInput]) input.disabled = !routes;
@@ -176,11 +191,13 @@ export class CurrentFlowController {
   show() {
     if (this.disposed) return;
     this.panel.hidden = false; this.toggleButton.setAttribute('aria-expanded', 'true');
+    this.toolbar.classList.add('is-open');
     this.toggleButton.title = 'Hide Current Flow panel'; this.layoutRegistration.update();
   }
   hide() {
     if (this.disposed) return;
     this.panel.hidden = true; this.toggleButton.setAttribute('aria-expanded', 'false');
+    this.toolbar.classList.remove('is-open');
     this.toggleButton.title = 'Show Current Flow panel'; this.layoutRegistration.update();
   }
   toggle() { if (this.panel.hidden) this.show(); else this.hide(); }
@@ -188,6 +205,6 @@ export class CurrentFlowController {
   dispose() {
     if (this.disposed) return;
     this.disposed = true; this.removeFrameCallback(); this.particles.dispose();
-    this.layoutRegistration.unregister(); this.toggleButton.remove(); this.panel.remove(); this.injectedStyle?.remove();
+    this.layoutRegistration.unregister(); this.toolbar.remove(); this.panel.remove(); this.injectedStyle?.remove();
   }
 }
