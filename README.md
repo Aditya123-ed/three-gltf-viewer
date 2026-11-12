@@ -6,15 +6,15 @@ Viewer: [gltf-viewer.donmccurdy.com](https://gltf-viewer.donmccurdy.com/)
 
 ![screenshot](https://user-images.githubusercontent.com/1848368/31580352-b7354096-b101-11e7-86d7-f07677835812.png)
 
-This fork adds a **Mesh Transparency** panel and a **Properties** panel. Both list one row per exported object using its original name; material primitives stay grouped under that object. Transparency adjusts all of an object's parts together from 0–100%, with name search and Restore all. Solid object colors remain independent of transparency and other objects sharing the same original material.
+The **Properties** panel combines object selection, annotations, solid colors, and transparency. It lists one row per exported object using its original name; material primitives stay grouped under that object. Select an object in the list or 3D view to use the **Transparency** section below **Object color**. Its slider ranges from 0% (original appearance) to 100% (hidden), with Reset object and Restore all actions. Color and transparency can be adjusted or reset independently. The separate Transparency bar and panel have been removed. The arrow on the floating Properties bar opens the panel, and X closes it.
 
-The **Current Flow** panel animates separate particles along detected wire meshes. Each wire has its own Forward/Reverse selector and visibility checkbox. On/Off, speed, particle color, particle size, and particle density apply to the whole flow. Density ranges from 10–300%; 100% preserves the original spacing. Directions and shared controls save in this browser and are included in Properties → Export / Import. Existing files with a single global direction or without density continue to load. All three panels start closed.
+The **Current Flow** panel animates separate particles along detected wire meshes. Each wire has its own Forward/Reverse selector and visibility checkbox. On/Off, speed, particle color, particle size, and particle density apply to the whole flow. Density ranges from 10–300%; 100% preserves the original spacing. Directions and shared controls save in this browser and are included in Properties → Export / Import. Existing files with a single global direction or without density continue to load. Both panels start closed.
 
 The checkbox on the floating **Current Flow** bar switches the particles on or off directly. The arrow opens the settings panel; its X closes the panel. Opening or closing the panel keeps the flow's On/Off state.
 
 The six short drops below the two entry gantries and three individually marked branches from the horizontal bus have direction corrections. These match the named source mesh and both endpoints, so other spans in the same mesh keep their direction. The corrections affect particle paths only; the GLB, object names, materials, and mesh grouping remain intact.
 
-It also adds a **Mesh Selection** panel listing the model's renderable meshes. Clicking a name highlights that exact mesh in the viewport with a colored bounding-box outline. Both panels have their own floating toggle buttons and share a stacked left-side layout, so either panel can be hidden independently. The selection panel includes mesh-name and hierarchy-path search, plus a clear-selection button.
+Properties search and viewport picking select and focus the same object, with a colored bounding-box outline. Properties and Current Flow share a stacked left-side layout and can be opened independently.
 
 ## Quickstart
 

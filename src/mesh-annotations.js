@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { registerMeshPanel } from './mesh-panel-layout.js';
 import { ObjectColorController } from './object-colors.js';
+import { ObjectTransparencyController } from './object-transparency.js';
 import { collectModelObjects, objectPath } from './model-objects.js';
 
 const STYLE_ID = 'mesh-annotation-controller-styles';
@@ -100,6 +101,9 @@ export class MeshAnnotationController {
       this.colorController = new ObjectColorController(
         this.panel.querySelector('.mesh-annotation-header'), this.objectGroups, appearance,
         this.modelKey, (object) => this._stablePath(object), () => this._updateCounts(),
+      );
+      this.transparencyController = new ObjectTransparencyController(
+        this.panel.querySelector('.mesh-annotation-header'), this.objectGroups, appearance,
       );
     }
     this._renderRows();
@@ -317,14 +321,21 @@ export class MeshAnnotationController {
       '.mesh-annotation-button.primary{color:#fff;background:#17618d;border-color:#3887b7}',
       '.mesh-annotation-button.primary:hover{background:#1e76a9}',
       '.mesh-annotation-button:disabled{opacity:.4;cursor:not-allowed}',
-      '.object-color-controls{min-width:0;margin:10px 0 0;padding:8px;border:1px solid #526174;border-radius:6px}',
-      '.object-color-controls legend{padding:0 4px;color:#c8d3df;font-size:11px;font-weight:700}',
+      '.object-color-controls,.object-transparency-controls{min-width:0;margin:10px 0 0;padding:8px;border:1px solid #526174;border-radius:6px}',
+      '.object-color-controls legend,.object-transparency-controls legend{padding:0 4px;color:#c8d3df;font-size:11px;font-weight:700}',
       '.object-color-selected{margin-bottom:7px;font-size:11px;overflow-wrap:anywhere}',
       '.object-color-inputs{display:flex;align-items:center;gap:6px;margin-bottom:7px}',
       '.object-color-inputs input[type=color]{flex:none;width:34px;height:34px;padding:2px;border:1px solid #526174;border-radius:4px;background:#202833;cursor:pointer}',
       '.object-color-hex{flex:1;min-width:0;width:80px;padding:7px 5px;font-size:11px}',
       '.object-color-controls input:disabled{opacity:.4;cursor:not-allowed}',
       '.object-color-message{font-size:11px;line-height:1.4;color:#a9d8f7}',
+      '.object-transparency-control{display:flex;align-items:center;gap:9px}',
+      '.object-transparency-control input{min-width:0;flex:1;accent-color:#69c8ff;cursor:pointer}',
+      '.object-transparency-control input:disabled{opacity:.4;cursor:default}',
+      '.object-transparency-value{width:36px;text-align:right;font-size:11px;color:#c5e6ff;font-variant-numeric:tabular-nums}',
+      '.object-transparency-scale{display:flex;justify-content:space-between;margin:3px 45px 7px 0;color:#aab5c3;font-size:10px}',
+      '.object-transparency-actions{display:flex;gap:7px;font-size:11px}',
+      '.object-transparency-hint[hidden]{display:none!important}',
       '.mesh-annotation-close{padding:3px 8px;font-size:16px}',
       '.mesh-annotation-list{min-height:0;flex:1 1 auto;overflow-y:auto;padding:5px 9px 9px;overscroll-behavior:contain}',
       '.mesh-annotation-item{display:flex;width:100%;align-items:flex-start;gap:8px;padding:8px 7px;color:#edf2f7;background:transparent;border:0;border-bottom:1px solid #303945;border-radius:4px;text-align:left;cursor:pointer}',
@@ -337,11 +348,17 @@ export class MeshAnnotationController {
       '.mesh-annotation-status{flex:0 0 auto;margin-top:1px;padding:3px 5px;color:#aebccc;background:#303b49;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:.04em}',
       '.mesh-annotation-status.saved{color:#a8e3c2;background:#174b3b}',
       '.mesh-annotation-empty{padding:14px 5px;color:#aab5c3;line-height:1.5}',
-      '.mesh-annotation-toggle{position:fixed;z-index:100002;left:14px;min-width:132px;height:38px;display:inline-flex;align-items:center;justify-content:flex-start;gap:9px;padding:0 12px;color:#f4f8fc;background:rgba(23,43,61,.97);border:1px solid #6486a5;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.46);font-family:sans-serif;font-size:11px;font-weight:600;line-height:1;letter-spacing:.15px;white-space:nowrap;cursor:pointer;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}',
+      '.mesh-annotation-toggle{position:fixed;z-index:100002;left:14px;min-width:132px;height:38px;display:inline-flex;align-items:center;padding:0;color:#f4f8fc;background:rgba(45,56,69,.97);border:1px solid #6486a5;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.46);font-size:11px;font-weight:600;line-height:1;letter-spacing:.15px;white-space:nowrap}',
+      '.mesh-annotation-toggle-copy{display:inline-flex;align-items:center;gap:9px;height:100%;padding:0 12px}',
       '.mesh-annotation-toggle-icon{display:inline-grid;width:16px;flex:0 0 16px;place-items:center;font-size:16px;line-height:1}',
       '.mesh-annotation-toggle-label{display:inline-block;font:600 11px/1 sans-serif}',
-      '.mesh-annotation-toggle:hover{background:#226a9a;border-color:#8bb8d9;box-shadow:0 5px 16px rgba(0,0,0,.52)}',
-      '.mesh-annotation-toggle.is-closed{background:rgba(45,56,69,.97)}',
+      '.mesh-annotation-toggle.is-open{background:#226a9a;border-color:#8bb8d9}',
+      '.mesh-annotation-open{display:grid;place-items:center;align-self:stretch;min-width:32px;margin:0;padding:0 8px;color:inherit;background:transparent;border:0;border-left:1px solid #6486a5;border-radius:0 7px 7px 0;cursor:pointer}',
+      '.mesh-annotation-open:hover{background:#226a9a}',
+      '.mesh-annotation-open:disabled{opacity:.4;cursor:default}',
+      '.mesh-annotation-open:focus-visible{outline:2px solid #b5e3ff;outline-offset:2px}',
+      '.mesh-annotation-open svg{width:12px;height:8px;transition:transform .15s}',
+      '.mesh-annotation-open[aria-expanded=true] svg{transform:rotate(180deg)}',
       '.mesh-annotation-editor{position:fixed;z-index:100004;left:374px;top:174px;width:360px;max-width:calc(100vw - 400px);max-height:calc(100vh - 188px);overflow:auto;padding:16px;color:#edf2f7;background:rgba(23,28,36,.99);border:1px solid #6486a5;border-radius:12px;box-shadow:0 14px 46px rgba(0,0,0,.62);font-size:13px}',
       '.mesh-annotation-editor-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}',
       '.mesh-annotation-editor-title{font-size:16px;font-weight:700;line-height:1.3}',
@@ -381,24 +398,31 @@ export class MeshAnnotationController {
   }
 
   _createUI() {
+    this.toolbar = document.createElement('div');
+    this.toolbar.className = 'mesh-annotation-toggle';
+    this.toolbar.setAttribute('role', 'group');
+    this.toolbar.setAttribute('aria-label', 'Properties toolbar');
+    this.toolbar.innerHTML = '<span class="mesh-annotation-toggle-copy"><span class="mesh-annotation-toggle-icon" aria-hidden="true">✎</span><span class="mesh-annotation-toggle-label">Properties</span></span>';
     this.toggleButton = document.createElement('button');
     this.toggleButton.type = 'button';
-    this.toggleButton.className = 'mesh-annotation-toggle';
-    this.toggleButton.innerHTML = '<span class="mesh-annotation-toggle-icon" aria-hidden="true">✎</span><span class="mesh-annotation-toggle-label">Properties</span>';
+    this.toggleButton.className = 'mesh-annotation-open';
+    this.toggleButton.innerHTML = '<svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     this.toggleButton.title = 'Show Properties panel';
     this.toggleButton.setAttribute('aria-label', 'Toggle Properties panel');
-    this.toggleButton.classList.add('is-closed');
     this.toggleButton.setAttribute('aria-expanded', 'false');
+    this.toggleButton.setAttribute('aria-controls', 'mesh-annotation-panel');
+    this.toolbar.appendChild(this.toggleButton);
 
     this.panel = document.createElement('section');
+    this.panel.id = 'mesh-annotation-panel';
     this.panel.className = 'mesh-annotation-panel';
     this.panel.hidden = true;
-    this.panel.setAttribute('aria-label', 'Mesh annotations');
+    this.panel.setAttribute('aria-label', 'Object properties');
     this.panel.innerHTML = [
       '<div class="mesh-annotation-header">',
       '  <div class="mesh-annotation-heading">',
       '    <span>Properties</span>',
-      '    <button type="button" class="mesh-annotation-button mesh-annotation-close mesh-annotation-hide" aria-label="Hide panel" title="Hide panel">×</button>',
+      '    <button type="button" class="mesh-annotation-button mesh-annotation-close mesh-annotation-hide" aria-label="Hide Properties panel" title="Hide Properties panel">×</button>',
       '  </div>',
       '  <div class="mesh-annotation-count"></div>',
       '  <input class="mesh-annotation-search" type="search" placeholder="Find an object…" aria-label="Search meshes">',
@@ -477,8 +501,8 @@ export class MeshAnnotationController {
     this.fileInput.accept = 'application/json,.json';
     this.fileInput.hidden = true;
 
-    document.body.append(this.toggleButton, this.panel, this.editor, this.fileInput);
-    this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 1);
+    document.body.append(this.toolbar, this.panel, this.editor, this.fileInput);
+    this.layoutRegistration = registerMeshPanel(this.panel, this.toolbar, 0);
   }
 
   _createOverlay() {
@@ -718,6 +742,7 @@ export class MeshAnnotationController {
 
     this.activeRecord = record;
     this.colorController?.setSelection(record.objectGroup);
+    this.transparencyController?.setSelection(record.objectGroup);
     this.records.forEach((item) => this._refreshRecord(item));
     if (record.row) record.row.scrollIntoView({ block: 'nearest' });
 
@@ -761,6 +786,7 @@ export class MeshAnnotationController {
     this._closeEditor();
     this.activeRecord = null;
     this.colorController?.setSelection(null);
+    this.transparencyController?.setSelection(null);
     this.records.forEach((record) => this._refreshRecord(record));
     this.onSelect(null);
     this._restoreCameraFocus();
@@ -1106,7 +1132,7 @@ export class MeshAnnotationController {
     if (this.disposed) return;
     this.panel.hidden = false;
     this.layoutRegistration && this.layoutRegistration.update();
-    this.toggleButton.classList.remove('is-closed');
+    this.toolbar.classList.add('is-open');
     this.toggleButton.title = 'Hide Properties panel';
     this.toggleButton.setAttribute('aria-expanded', 'true');
   }
@@ -1115,7 +1141,7 @@ export class MeshAnnotationController {
     if (this.disposed) return;
     this.panel.hidden = true;
     this.layoutRegistration && this.layoutRegistration.update();
-    this.toggleButton.classList.add('is-closed');
+    this.toolbar.classList.remove('is-open');
     this.toggleButton.title = 'Show Properties panel';
     this.toggleButton.setAttribute('aria-expanded', 'false');
   }
@@ -1133,11 +1159,12 @@ export class MeshAnnotationController {
     this.sharedRequest?.abort();
     this.annotationDb?.close();
     this.colorController?.dispose();
+    this.transparencyController?.dispose();
     if (this.frameId !== null) window.cancelAnimationFrame(this.frameId);
     document.removeEventListener('keydown', this._onKeyDown);
     if (this.layoutRegistration) this.layoutRegistration.unregister();
     this.panel.remove();
-    this.toggleButton.remove();
+    this.toolbar.remove();
     this.editor.remove();
     this.fileInput.remove();
     this.overlay.remove();

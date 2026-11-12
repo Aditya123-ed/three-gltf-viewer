@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { Viewer } from './viewer.js';
-import { MeshOpacityController } from './mesh-opacity.js';
 import { MeshAnnotationController } from './mesh-annotations.js';
 import { MeshAppearanceController } from './mesh-appearance.js';
 import { CurrentFlowController } from './current-flow.js';
@@ -36,7 +35,6 @@ class App {
 		this.el = el;
 		this.viewer = null;
 		this.viewerEl = null;
-		this.meshOpacityController = null;
 		this.meshAppearanceController = null;
 		this.meshAnnotationController = null;
 		this.currentFlowController = null;
@@ -118,10 +116,6 @@ class App {
 		}
 		this.currentFlowController?.dispose();
 		this.currentFlowController = null;
-		if (this.meshOpacityController) {
-			this.meshOpacityController.dispose();
-			this.meshOpacityController = null;
-		}
 		this.meshAppearanceController?.dispose();
 		this.meshAppearanceController = null;
 
@@ -139,15 +133,10 @@ class App {
 		viewer
 			.load(fileURL, rootPath, fileMap)
 			.then((gltf) => {
-				// Add the opacity panel to the loaded scene. This runs for both URL-loaded
-				// models and files dropped into the viewer.
+				// Attach object properties and flow controls to URL-loaded or dropped models.
 				const loadedScene = window.VIEWER.scene || gltf?.scene || gltf?.scenes?.[0];
 				if (loadedScene) {
 					this.meshAppearanceController = new MeshAppearanceController(loadedScene, () => this.viewer.invalidateShadows());
-					this.meshOpacityController = new MeshOpacityController(loadedScene, {
-						appearance: this.meshAppearanceController,
-						associations: gltf.parser?.associations,
-					});
 					const annotationModelKey =
 						typeof rootFile === 'string'
 							? rootFile

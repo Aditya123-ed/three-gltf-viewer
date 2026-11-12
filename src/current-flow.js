@@ -133,7 +133,7 @@ export class CurrentFlowController {
     this.sizeInput.addEventListener('input', () => this._change({ size: Number(this.sizeInput.value) }));
     this.densityInput.addEventListener('input', () => this._change({ density: Number(this.densityInput.value) / 100 }));
     document.body.append(this.toolbar, this.panel);
-    this.layoutRegistration = registerMeshPanel(this.panel, this.toolbar, 2);
+    this.layoutRegistration = registerMeshPanel(this.panel, this.toolbar, 1);
   }
 
   _refreshUI() {

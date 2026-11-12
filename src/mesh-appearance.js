@@ -24,6 +24,10 @@ export class MeshAppearanceController {
     }
   }
 
+  getOpacity(mesh) {
+    return (this.records.get(mesh)?.opacity ?? 1) * 100;
+  }
+
   setOpacity(mesh, percentage) {
     const record = this.records.get(mesh);
     if (!record || !Number.isFinite(percentage)) return;
