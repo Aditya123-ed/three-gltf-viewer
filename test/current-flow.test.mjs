@@ -154,3 +154,49 @@ test('Properties exports flow settings even when no annotations or colors exist'
     URL.createObjectURL = createURL; URL.revokeObjectURL = revokeURL;
   }
 });
+
+test('each wire reverses independently without changing another wire or shared appearance settings', () => {
+  const { scene, root, wire, particles: first, camera } = fixture();
+  first.dispose();
+  const second = wire.clone(); second.name = 'Second_Wire'; second.position.z = 3; root.add(second);
+  const groups = collectFlowWires(root);
+  const particles = new CurrentFlowParticles(scene, groups);
+  particles.update(0, camera);
+  particles.update(0.1, camera);
+  const before = particles.positions.slice();
+  particles.setSettings({ ...FLOW_DEFAULTS, color: '#00ccff', size: 9, directions: { Cable: 'reverse', Second_Wire: 'forward' } });
+  particles.update(0, camera);
+  assert.deepEqual(particles.positions, before, 'changing direction must not jump the particles');
+  particles.update(0.1, camera);
+  assert.ok(Math.abs(particles.groupDistances.get('Cable')) < 1e-10);
+  assert.ok(Math.abs(particles.groupDistances.get('Second_Wire') - 0.2) < 1e-10);
+  assert.equal(particles.material.color.getHexString(), '00ccff');
+  assert.equal(particles.material.size, 9);
+  particles.setSettings({ ...particles.settings, speed: 4 });
+  particles.update(0.1, camera);
+  assert.ok(Math.abs(particles.groupDistances.get('Cable') + 0.4) < 1e-10);
+  assert.ok(Math.abs(particles.groupDistances.get('Second_Wire') - 0.6) < 1e-10);
+  particles.dispose();
+});
+
+test('per-wire directions survive export/import, honor legacy defaults, and reject malformed values', () => {
+  const settings = parseFlowSettings({ ...FLOW_DEFAULTS, direction: 'reverse', directions: { Cable: 'forward', Second_Wire: 'reverse' } });
+  const controller = Object.assign(Object.create(CurrentFlowController.prototype), {
+    settings, groups: [{ key: 'Cable' }, { key: 'Second_Wire' }, { key: 'Third_Wire' }],
+  });
+  const exported = controller.exportSettings();
+  assert.equal(exported.directions.Cable, 'forward');
+  assert.equal(exported.directions.Third_Wire, 'reverse');
+  const restored = parseFlowSettings(JSON.parse(JSON.stringify(exported)));
+  assert.equal(restored.directions.Second_Wire, 'reverse');
+  for (const directions of [null, [], 'reverse', { Cable: true }, { Cable: 'up' }]) {
+    assert.throws(() => parseFlowSettings({ ...FLOW_DEFAULTS, directions }));
+  }
+});
+
+test('wire clamps stay in the object list and are excluded from flow candidates', () => {
+  const { root, wire, particles } = fixture();
+  const clamp = wire.clone(); clamp.name = 'Wire_Clamps'; root.add(clamp);
+  assert.deepEqual(collectFlowWires(root).map((group) => group.name), ['Cable']);
+  particles.dispose();
+});

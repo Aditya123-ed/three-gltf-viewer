@@ -1,10 +1,11 @@
 import { registerMeshPanel } from './mesh-panel-layout.js';
 import { MeshAppearanceController } from './mesh-appearance.js';
+import { collectModelObjects } from './model-objects.js';
 
 /**
- * Per-mesh opacity controller for donmccurdy/three-gltf-viewer.
- * Creates independent material clones per mesh so editing one mesh does not
- * change other meshes that shared the same glTF material.
+ * One opacity row per exported object, including all its material primitives.
+ * The shared appearance controller isolates edits from other objects using
+ * the same glTF material and keeps solid colors independent of opacity.
  */
 
 const STYLE_ID = 'mesh-opacity-controller-styles';
@@ -25,15 +26,9 @@ export class MeshOpacityController {
   }
 
   _collectMeshes() {
-    this.root.traverse((object) => {
-      if (!object.isMesh || !object.material) return;
-
-      this.records.push({
-        mesh: object,
-        row: null,
-        searchText: '',
-      });
-    });
+    this.records = collectModelObjects(this.root, this.options.associations).map((group) => ({
+      ...group, row: null, searchText: (group.name + ' ' + group.displayPath).toLowerCase(),
+    }));
   }
 
   _injectStyles() {
@@ -224,7 +219,7 @@ export class MeshOpacityController {
           <span>Mesh Transparency</span>
           <button type="button" class="mesh-opacity-button mesh-opacity-close" aria-label="Hide panel" title="Hide panel">×</button>
         </div>
-        <div class="mesh-opacity-count">${this.records.length} individual mesh${this.records.length === 1 ? '' : 'es'} detected</div>
+        <div class="mesh-opacity-count">${this.records.length} object${this.records.length === 1 ? '' : 's'} detected</div>
         <input class="mesh-opacity-search" type="search" placeholder="Search mesh names…" aria-label="Search mesh names">
         <div class="mesh-opacity-actions">
           <button type="button" class="mesh-opacity-button mesh-opacity-reset">Restore all</button>
@@ -245,16 +240,6 @@ export class MeshOpacityController {
     this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 0);
   }
 
-  _meshPath(mesh) {
-    const names = [];
-    let current = mesh;
-    while (current) {
-      if (current.name) names.unshift(current.name);
-      current = current.parent;
-    }
-    return names.join(' / ') || mesh.type || 'Mesh';
-  }
-
   _renderRows() {
     this.list.innerHTML = '';
 
@@ -269,11 +254,11 @@ export class MeshOpacityController {
 
       const name = document.createElement('div');
       name.className = 'mesh-opacity-name';
-      name.textContent = `${index + 1}. ${record.mesh.name || 'Unnamed mesh'}`;
+      name.textContent = `${index + 1}. ${record.name}`;
 
       const path = document.createElement('div');
       path.className = 'mesh-opacity-path';
-      path.textContent = this._meshPath(record.mesh);
+      path.textContent = record.displayPath;
 
       const control = document.createElement('div');
       control.className = 'mesh-opacity-control';
@@ -285,7 +270,7 @@ export class MeshOpacityController {
       slider.max = '100';
       slider.step = '1';
       slider.value = '100';
-      slider.setAttribute('aria-label', `Opacity for ${record.mesh.name || 'unnamed mesh'}`);
+      slider.setAttribute('aria-label', `Opacity for ${record.name}`);
 
       const value = document.createElement('span');
       value.className = 'mesh-opacity-value';
@@ -301,7 +286,6 @@ export class MeshOpacityController {
       this.list.appendChild(row);
 
       record.row = row;
-      record.searchText = `${record.mesh.name || ''} ${this._meshPath(record)}`.toLowerCase();
     });
   }
 
@@ -313,12 +297,12 @@ export class MeshOpacityController {
   }
 
   _setOpacity(record, percentage) {
-    this.appearance.setOpacity(record.mesh, percentage);
+    record.meshes.forEach((mesh) => this.appearance.setOpacity(mesh, percentage));
   }
 
   restoreAll() {
     this.records.forEach((record) => {
-      this.appearance.setOpacity(record.mesh, 100);
+      this._setOpacity(record, 100);
       if (record.row) {
         const slider = record.row.querySelector('.mesh-opacity-range');
         const value = record.row.querySelector('.mesh-opacity-value');

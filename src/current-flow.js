@@ -50,7 +50,9 @@ export class CurrentFlowController {
       .current-flow-color{width:48px;height:34px;padding:2px;background:#242c37;border:1px solid #526174;border-radius:4px;cursor:pointer}
       .current-flow-value{font-variant-numeric:tabular-nums;color:#c5e6ff;font-size:11px}
       .current-flow-wires{margin-top:12px;padding-top:11px;border-top:1px solid #394553}
-      .current-flow-wire{display:flex;align-items:flex-start;gap:3px;margin-top:9px;overflow-wrap:anywhere;line-height:1.4;font-size:11px}
+      .current-flow-wire{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:8px;margin-top:11px;overflow-wrap:anywhere;line-height:1.4;font-size:11px}
+      .current-flow-wire-name{display:flex;align-items:flex-start;gap:3px;min-width:0}
+      .current-flow-wire-direction{padding:7px 5px;font-size:11px}
       .current-flow-wire input{flex:none;margin-top:2px!important}
       .current-flow-message{margin-top:10px;color:#a9d8f7;font-size:11px;line-height:1.4}
     `;
@@ -75,34 +77,40 @@ export class CurrentFlowController {
       <div class="current-flow-body">
         <label class="current-flow-row"><input type="checkbox" class="current-flow-enabled">Show current flow <span class="current-flow-state"></span></label>
         <label class="current-flow-row"><span class="current-flow-label">Speed <output class="current-flow-speed-value current-flow-value"></output></span><input type="range" class="current-flow-speed" aria-label="Current flow speed" min="0.1" max="10" step="0.1"></label>
-        <label class="current-flow-row"><span class="current-flow-label">Direction</span><select class="current-flow-select current-flow-direction" aria-label="Current flow direction"><option value="forward">Forward (route start → end)</option><option value="reverse">Reverse (route end → start)</option></select></label>
         <label class="current-flow-row"><span class="current-flow-label">Color</span><span class="current-flow-color-wrap"><input type="color" class="current-flow-color" aria-label="Current flow color"><output class="current-flow-color-value current-flow-value"></output></span></label>
         <label class="current-flow-row"><span class="current-flow-label">Particle size <output class="current-flow-size-value current-flow-value"></output></span><input type="range" class="current-flow-size" aria-label="Current flow particle size" min="2" max="16" step="1"></label>
         <div class="current-flow-help">Schematic power flow. Speed controls the illustration, not actual electron motion.</div>
-        <div class="current-flow-wires"><span class="current-flow-label">Wire objects</span><div class="current-flow-wire-list"></div></div>
+        <div class="current-flow-wires"><span class="current-flow-label">Direction per wire mesh</span><div class="current-flow-help">Choose Forward or Reverse for each wire object. Speed, color, and size apply to all wires.</div><div class="current-flow-wire-list"></div></div>
         <div class="current-flow-help">Settings save in this browser. Properties → Export includes flow settings for sharing.</div>
         <div class="current-flow-message" role="status" aria-live="polite"></div>
       </div>`;
     const query = (selector) => this.panel.querySelector('.current-flow-' + selector);
     this.enabledInput = query('enabled'); this.speedInput = query('speed');
-    this.directionInput = query('direction'); this.colorInput = query('color'); this.sizeInput = query('size');
+    this.colorInput = query('color'); this.sizeInput = query('size');
     this.count = query('count'); this.stateLabel = query('state'); this.message = query('message');
     this.speedValue = query('speed-value'); this.colorValue = query('color-value'); this.sizeValue = query('size-value');
     this.wireInputs = new Map();
+    this.wireDirections = new Map();
     const list = query('wire-list');
     for (const group of this.groups) {
-      const label = document.createElement('label'); label.className = 'current-flow-wire';
+      const row = document.createElement('div'); row.className = 'current-flow-wire';
+      const label = document.createElement('label'); label.className = 'current-flow-wire-name';
       const input = document.createElement('input'); input.type = 'checkbox';
       input.setAttribute('aria-label', 'Show flow on ' + group.name);
       const text = document.createElement('span'); text.textContent = group.name + ' · ' + group.routes.length + ' spans';
-      label.append(input, text); list.appendChild(label); this.wireInputs.set(group.key, input);
+      label.append(input, text);
+      const direction = document.createElement('select'); direction.className = 'current-flow-select current-flow-wire-direction';
+      direction.setAttribute('aria-label', 'Flow direction for ' + group.name);
+      direction.innerHTML = '<option value="forward">Forward</option><option value="reverse">Reverse</option>';
+      row.append(label, direction); list.appendChild(row);
+      this.wireInputs.set(group.key, input); this.wireDirections.set(group.key, direction);
       input.addEventListener('change', () => this._change({ groups: { ...this.settings.groups, [group.key]: input.checked } }));
+      direction.addEventListener('change', () => this._change({ directions: { ...this.settings.directions, [group.key]: direction.value } }));
     }
     this.toggleButton.addEventListener('click', () => this.toggle());
     query('close').addEventListener('click', () => this.hide());
     this.enabledInput.addEventListener('change', () => this._change({ enabled: this.enabledInput.checked }));
     this.speedInput.addEventListener('input', () => this._change({ speed: Number(this.speedInput.value) }));
-    this.directionInput.addEventListener('change', () => this._change({ direction: this.directionInput.value }));
     this.colorInput.addEventListener('input', () => this._change({ color: this.colorInput.value }));
     this.sizeInput.addEventListener('input', () => this._change({ size: Number(this.sizeInput.value) }));
     document.body.append(this.toggleButton, this.panel);
@@ -111,15 +119,16 @@ export class CurrentFlowController {
 
   _refreshUI() {
     this.enabledInput.checked = this.settings.enabled;
-    this.speedInput.value = String(this.settings.speed); this.directionInput.value = this.settings.direction;
+    this.speedInput.value = String(this.settings.speed);
     this.colorInput.value = this.settings.color; this.sizeInput.value = String(this.settings.size);
     this.speedValue.textContent = this.settings.speed.toFixed(1) + ' m/s';
     this.sizeValue.textContent = this.settings.size + ' px'; this.colorValue.textContent = this.settings.color.toUpperCase();
     this.stateLabel.textContent = this.settings.enabled ? '· On' : '· Off';
     const routes = this.particles.routes.length;
     this.count.textContent = routes ? routes + ' cable spans · ' + this.groups.length + ' wire objects' : 'No traceable open cable tubes found in this model.';
-    for (const input of [this.enabledInput, this.speedInput, this.directionInput, this.colorInput, this.sizeInput]) input.disabled = !routes;
+    for (const input of [this.enabledInput, this.speedInput, this.colorInput, this.sizeInput]) input.disabled = !routes;
     for (const [key, input] of this.wireInputs) input.checked = this.settings.groups[key] !== false;
+    for (const [key, input] of this.wireDirections) input.value = this.settings.directions[key] || this.settings.direction;
   }
 
   _change(patch) {
@@ -136,7 +145,11 @@ export class CurrentFlowController {
     } catch (error) { this.message.textContent = 'Browser saving failed. Use Properties → Export to keep your flow settings.'; }
   }
 
-  exportSettings() { return { ...this.settings, groups: { ...this.settings.groups } }; }
+  exportSettings() {
+    const directions = { ...this.settings.directions };
+    for (const group of this.groups || []) directions[group.key] = directions[group.key] || this.settings.direction;
+    return { ...this.settings, groups: { ...this.settings.groups }, directions };
+  }
 
   parseSettings(input) { return parseFlowSettings(input); }
 

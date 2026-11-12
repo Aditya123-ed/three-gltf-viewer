@@ -146,6 +146,7 @@ class App {
 					this.meshAppearanceController = new MeshAppearanceController(loadedScene, () => this.viewer.invalidateShadows());
 					this.meshOpacityController = new MeshOpacityController(loadedScene, {
 						appearance: this.meshAppearanceController,
+						associations: gltf.parser?.associations,
 					});
 					const annotationModelKey =
 						typeof rootFile === 'string'

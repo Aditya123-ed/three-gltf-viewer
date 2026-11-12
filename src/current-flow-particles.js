@@ -3,12 +3,13 @@ import {
   Float32BufferAttribute, Group, Points, PointsMaterial, RGBAFormat, Vector3,
 } from 'three';
 import { extractWireRoutes } from './wire-routes.js';
+import { sourceObject, objectName } from './model-objects.js';
 
 export const FLOW_DEFAULTS = Object.freeze({ enabled: true, speed: 1, direction: 'forward', color: '#35d9ff', size: 6 });
 
 export function parseFlowSettings(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid current flow settings.');
-  const settings = { ...FLOW_DEFAULTS, groups: Object.create(null) };
+  const settings = { ...FLOW_DEFAULTS, groups: Object.create(null), directions: Object.create(null) };
   for (const key of Object.keys(FLOW_DEFAULTS)) if (Object.hasOwn(input, key)) settings[key] = input[key];
   if (typeof settings.enabled !== 'boolean' || !Number.isFinite(settings.speed) || settings.speed < 0.1 || settings.speed > 10 ||
       !Number.isFinite(settings.size) || settings.size < 2 || settings.size > 16 ||
@@ -25,6 +26,15 @@ export function parseFlowSettings(input) {
       settings.groups[key] = value;
     }
   }
+  if (input.directions !== undefined) {
+    if (!input.directions || typeof input.directions !== 'object' || Array.isArray(input.directions) || Object.keys(input.directions).length > 512) {
+      throw new Error('Invalid per-wire flow directions.');
+    }
+    for (const [key, value] of Object.entries(input.directions)) {
+      if (key.length > 512 || !['forward', 'reverse'].includes(value)) throw new Error('Invalid per-wire flow direction.');
+      settings.directions[key] = value;
+    }
+  }
   return settings;
 }
 
@@ -32,16 +42,11 @@ export function collectFlowWires(root, associations = null) {
   const groups = new Map(), cache = new Map();
   root.traverse((mesh) => {
     if (!mesh.isMesh || mesh.isInstancedMesh || !mesh.geometry) return;
-    let object = mesh;
-    if (associations) {
-      let current = mesh;
-      while (current && current !== root) {
-        if (associations.get(current)?.nodes !== undefined) { object = current; break; }
-        current = current.parent;
-      }
-    }
-    const name = object.userData.name || object.name || mesh.name || '';
+    const object = sourceObject(mesh, root, associations);
+    const name = objectName(object);
     if (!/(?:wire|cable|conductor|curve|b[eé]zier)/i.test(name)) return;
+    // Mechanical wire accessories remain in the object panels, not flow routes.
+    if (/(?:^|[\s_.-])(?:clamps?|insulators?|brackets?|terminals?)(?:$|[\s_.-])/i.test(name)) return;
     const names = [];
     for (let current = object; current && current !== root; current = current.parent) {
       names.unshift(current.userData.name || current.name || current.type);
@@ -78,6 +83,7 @@ export class CurrentFlowParticles {
     this.groups = groups;
     this.settings = parseFlowSettings(initial);
     this.distance = 0;
+    this.groupDistances = new Map(groups.map((group) => [group.key, 0]));
     this.disposed = false;
     this.transformCache = new Map();
     const all = groups.flatMap((group) => group.routes.map((route) => ({ ...route, group })));
@@ -151,8 +157,13 @@ export class CurrentFlowParticles {
     if (this.disposed) return;
     this.effectRoot.visible = this.settings.enabled && this.routes.length > 0;
     if (!this.effectRoot.visible || !camera) return;
-    this.distance += Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0)) * this.settings.speed *
-      (this.settings.direction === 'reverse' ? -1 : 1);
+    const step = Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0)) * this.settings.speed;
+    for (const group of this.groups) {
+      const direction = this.settings.directions[group.key] || this.settings.direction;
+      this.groupDistances.set(group.key, this.groupDistances.get(group.key) + step * (direction === 'reverse' ? -1 : 1));
+    }
+    // Retain the first route's distance for existing debugging integrations.
+    this.distance = this.groupDistances.get(this.groups[0]?.key) || 0;
     this._updateTransforms();
     camera.getWorldPosition(this.cameraPosition);
     if (camera.isOrthographicCamera) camera.getWorldDirection(this.cameraDirection).negate();
@@ -160,7 +171,8 @@ export class CurrentFlowParticles {
     for (const route of this.routes) {
       if (this.settings.groups[route.group.key] === false || !this._visible(route.mesh) || route.worldLength <= 0) continue;
       for (let i = 0; i < route.count; i++) {
-        const progress = ((i / route.count + route.phase + this.distance / route.worldLength) % 1 + 1) % 1;
+        const distance = this.groupDistances.get(route.group.key);
+        const progress = ((i / route.count + route.phase + distance / route.worldLength) % 1 + 1) % 1;
         route.curve.getPointAt(progress, this.position);
         // Lift dots just in front of the cable surface, while still depth-testing
         // against other equipment. They remain visible without drawing through it.
@@ -183,5 +195,6 @@ export class CurrentFlowParticles {
     this.geometry.dispose(); this.material.dispose(); this.texture.dispose();
     this.routes.length = 0;
     this.transformCache.clear();
+    this.groupDistances.clear();
   }
 }

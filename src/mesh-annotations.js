@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { registerMeshPanel } from './mesh-panel-layout.js';
 import { ObjectColorController } from './object-colors.js';
+import { collectModelObjects, objectPath } from './model-objects.js';
 
 const STYLE_ID = 'mesh-annotation-controller-styles';
 const FORMAT = 'three-gltf-viewer-annotations';
@@ -111,46 +112,21 @@ export class MeshAnnotationController {
   }
 
   _collectMeshes() {
-    this.root.traverse((mesh) => {
-      if (!mesh.isMesh || !mesh.geometry) return;
-      // GLTFLoader creates a child Mesh for each material primitive. Its node
-      // association identifies the original exported object containing those parts.
-      const object = this._sourceObject(mesh);
-      let group = this.groupByObject.get(object);
-      if (!group) {
-        group = {
-          object,
-          name: object.userData.name || object.name || 'Unnamed object',
-          displayPath: this._displayPath(object),
-          records: [],
-          searchText: '',
+    for (const item of collectModelObjects(this.root, this.associations)) {
+      const group = { ...item, records: [], searchText: '' };
+      this.objectGroups.push(group);
+      this.groupByObject.set(group.object, group);
+      for (const mesh of group.meshes) {
+        const record = {
+          mesh, objectGroup: group, row: null, marker: null,
+          path: this._stablePath(mesh), displayPath: this._displayPath(mesh),
+          searchText: '', localCenter: null,
         };
-        this.objectGroups.push(group);
-        this.groupByObject.set(object, group);
+        group.records.push(record);
+        this.records.push(record);
+        this.recordByMesh.set(mesh, record);
       }
-      const record = {
-        mesh,
-        objectGroup: group,
-        row: null,
-        marker: null,
-        path: this._stablePath(mesh),
-        displayPath: this._displayPath(mesh),
-        searchText: '',
-        localCenter: null,
-      };
-      group.records.push(record);
-      this.records.push(record);
-      this.recordByMesh.set(mesh, record);
-    });
-  }
-
-  _sourceObject(mesh) {
-    let object = mesh;
-    while (object && object !== this.root) {
-      if (this.associations?.get(object)?.nodes !== undefined) return object;
-      object = object.parent;
     }
-    return mesh;
   }
 
   _preferredRecord(group, candidate = null) {
@@ -195,14 +171,7 @@ export class MeshAnnotationController {
   }
 
   _displayPath(mesh) {
-    const names = [];
-    let current = mesh;
-    while (current) {
-      const name = current.userData.name || current.name;
-      if (name) names.unshift(name);
-      current = current.parent;
-    }
-    return names.join(' / ') || mesh.type || 'Mesh';
+    return objectPath(mesh);
   }
 
   _loadAnnotations() {
@@ -335,7 +304,7 @@ export class MeshAnnotationController {
     style.textContent = [
       '.mesh-annotation-panel,.mesh-annotation-toggle,.mesh-annotation-editor{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box}',
       '.mesh-annotation-panel *,.mesh-annotation-toggle *,.mesh-annotation-editor *{box-sizing:border-box}',
-      '.mesh-annotation-panel[hidden],.mesh-annotation-editor[hidden],.mesh-annotation-preview[hidden]{display:none!important}',
+      '.mesh-annotation-panel[hidden],.mesh-annotation-editor[hidden],.mesh-annotation-preview[hidden],.mesh-annotation-item[hidden]{display:none!important}',
       '.mesh-annotation-panel{z-index:100001;display:flex;flex-direction:column;overflow:hidden;color:#edf2f7;background:rgba(23,28,36,.98);border:1px solid #526174;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.55);font-size:13px}',
       '.mesh-annotation-header{flex:0 0 auto;max-height:65%;overflow-y:auto;padding:11px 13px;border-bottom:1px solid #394553}',
       '.mesh-annotation-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:15px;font-weight:700}',
