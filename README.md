@@ -10,7 +10,7 @@ This fork adds a **Mesh Transparency** panel and a **Properties** panel. Both li
 
 The **Current Flow** panel animates separate particles along detected wire meshes. Each wire has its own Forward/Reverse selector and visibility checkbox. On/Off, speed, particle color, particle size, and particle density apply to the whole flow. Density ranges from 10–300%; 100% preserves the original spacing. Directions and shared controls save in this browser and are included in Properties → Export / Import. Existing files with a single global direction or without density continue to load. All three panels start closed.
 
-The six short drop spans below the substation's two entry gantries have individual direction corrections. These match the named source mesh and both endpoints, so other spans in the same mesh keep their direction. The corrections affect particle paths only; the GLB, object names, materials, and mesh grouping remain intact.
+The six short drops below the two entry gantries and three individually marked branches from the horizontal bus have direction corrections. These match the named source mesh and both endpoints, so other spans in the same mesh keep their direction. The corrections affect particle paths only; the GLB, object names, materials, and mesh grouping remain intact.
 
 It also adds a **Mesh Selection** panel listing the model's renderable meshes. Clicking a name highlights that exact mesh in the viewport with a colored bounding-box outline. Both panels have their own floating toggle buttons and share a stacked left-side layout, so either panel can be hidden independently. The selection panel includes mesh-name and hierarchy-path search, plus a clear-selection button.
 

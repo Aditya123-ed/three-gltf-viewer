@@ -6,15 +6,18 @@ import { correctFlowRoute } from '../src/flow-route-corrections.js';
 import { CurrentFlowParticles, FLOW_DEFAULTS, parseFlowSettings } from '../src/current-flow-particles.js';
 
 // Samples from all 87 actual spans of the revised GLB, including their exact
-// endpoint centroids. The marked regions contain three drops at each gantry.
+// endpoint centroids. Keep the earlier gantry corrections when adding the
+// three newly marked branches from the horizontal bus.
 const spans = JSON.parse(fs.readFileSync(new URL('./fixtures/substation-wire-spans.json', import.meta.url)));
-const marked = new Set([
+const previousMarks = new Set([
   'Internal Supply Wire1:27', 'Internal Supply Wire1:28', 'Internal Supply Wire1:29',
   'Internal Supply Wire3:28', 'Internal Supply Wire3:29', 'Internal Supply Wire3:30',
 ]);
+const newMarks = new Set(['Internal Supply Wire1:9', 'Internal Supply Wire2:12', 'Internal Supply Wire3:15']);
+const marked = new Set([...previousMarks, ...newMarks]);
 const routeOf = (span) => ({ ...span, points: span.points.map((point) => new Vector3(...point)) });
 
-test('only the six marked gantry drops reverse; the other 81 spans and source points stay unchanged', () => {
+test('the nine individually marked spans reverse; the other 78 source paths and all source points stay unchanged', () => {
   const correctedIds = [];
   // Reversing the traversal order demonstrates that matching does not use indices.
   for (const span of [...spans].reverse()) {
@@ -36,7 +39,7 @@ test('only the six marked gantry drops reverse; the other 81 spans and source po
   assert.deepEqual(new Set(correctedIds), marked);
 });
 
-test('the six corrected particle paths move opposite while all other paths retain saved per-mesh directions', () => {
+test('only the three new branches change motion, preserving earlier corrections and saved mesh directions', () => {
   const scene = new Scene(), camera = new PerspectiveCamera(); camera.position.set(-70, 40, 50);
   const mesh = new Mesh(new BoxGeometry(), new MeshStandardMaterial()); scene.add(mesh);
   const groups = new Map();
@@ -45,9 +48,12 @@ test('the six corrected particle paths move opposite while all other paths retai
     groups.get(span.mesh).routes.push({ ...routeOf(span), mesh });
   }
   const originals = [...groups.values()];
+  const previous = originals.map((group) => ({ ...group, routes: group.routes.map((route) =>
+    previousMarks.has(group.name + ':' + route.span) ? { ...route, points: [...route.points].reverse() } : route,
+  ) }));
   const corrections = originals.map((group) => ({ ...group, routes: group.routes.map((route) => correctFlowRoute(group.name, route)) }));
   const settings = { ...FLOW_DEFAULTS, directions: { 'Internal Supply Wire1': 'reverse' } };
-  const before = new CurrentFlowParticles(scene, originals, settings);
+  const before = new CurrentFlowParticles(scene, previous, settings);
   const after = new CurrentFlowParticles(scene, corrections, settings);
   for (const effect of [before, after]) {
     effect.routes.forEach((route) => { route.phase = 0.5; });
@@ -60,7 +66,7 @@ test('the six corrected particle paths move opposite while all other paths retai
     const id = route.group.name + ':' + route.span;
     const deltaBefore = new Vector3().fromArray(before.positions, offset).sub(new Vector3().fromArray(startBefore, offset));
     const deltaAfter = new Vector3().fromArray(after.positions, offset).sub(new Vector3().fromArray(startAfter, offset));
-    if (marked.has(id)) assert.ok(deltaBefore.dot(deltaAfter) < 0, id);
+    if (newMarks.has(id)) assert.ok(deltaBefore.dot(deltaAfter) < 0, id);
     else assert.ok(deltaBefore.distanceTo(deltaAfter) < 1e-8, id);
     offset += route.count * 3;
   }
