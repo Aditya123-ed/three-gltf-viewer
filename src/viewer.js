@@ -37,7 +37,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GUI } from 'dat.gui';
 
 import { environments } from './environments.js';
-import { DAYLIGHT, DAYLIGHT_NAME, createDaylightLights, daylightSunColor, fitDaylightShadow } from './daylight.js';
+import { DAYLIGHT_NAME, createDaylightLights, daylightSunColor, fitDaylightShadow } from './daylight.js';
 
 const DEFAULT_CAMERA = '[default]';
 
@@ -89,13 +89,13 @@ export class Viewer {
 
 			// Lights
 			punctualLights: true,
-			exposure: 0.0,
+			exposure: 0.5,
 			toneMapping: options.preset === Preset.ASSET_GENERATOR ? LinearToneMapping : AgXToneMapping,
-			environmentIntensity: 1,
+			environmentIntensity: 1.81,
 			shadows: options.preset !== Preset.ASSET_GENERATOR,
-			ambientIntensity: 0.02,
+			ambientIntensity: 0.6,
 			ambientColor: '#FFFFFF',
-			directIntensity: DAYLIGHT.sunIntensity,
+			directIntensity: 7.6,
 			directColor: '#' + daylightSunColor(),
 			bgColor: '#191919',
 
