@@ -79,14 +79,17 @@ export class CurrentFlowController {
         <label class="current-flow-row"><span class="current-flow-label">Speed <output class="current-flow-speed-value current-flow-value"></output></span><input type="range" class="current-flow-speed" aria-label="Current flow speed" min="0.1" max="10" step="0.1"></label>
         <label class="current-flow-row"><span class="current-flow-label">Color</span><span class="current-flow-color-wrap"><input type="color" class="current-flow-color" aria-label="Current flow color"><output class="current-flow-color-value current-flow-value"></output></span></label>
         <label class="current-flow-row"><span class="current-flow-label">Particle size <output class="current-flow-size-value current-flow-value"></output></span><input type="range" class="current-flow-size" aria-label="Current flow particle size" min="2" max="16" step="1"></label>
+        <label class="current-flow-row"><span class="current-flow-label">Particle density <output class="current-flow-density-value current-flow-value"></output></span><input type="range" class="current-flow-density" aria-label="Current flow particle density" min="10" max="300" step="10"></label>
+        <div class="current-flow-help">Density adds or removes dots along all wires. 100% keeps the original spacing.</div>
         <div class="current-flow-help">Schematic power flow. Speed controls the illustration, not actual electron motion.</div>
-        <div class="current-flow-wires"><span class="current-flow-label">Direction per wire mesh</span><div class="current-flow-help">Choose Forward or Reverse for each wire object. Speed, color, and size apply to all wires.</div><div class="current-flow-wire-list"></div></div>
+        <div class="current-flow-wires"><span class="current-flow-label">Direction per wire mesh</span><div class="current-flow-help">Choose Forward or Reverse for each wire object. Speed, color, size, and density apply to all wires.</div><div class="current-flow-wire-list"></div></div>
         <div class="current-flow-help">Settings save in this browser. Properties → Export includes flow settings for sharing.</div>
         <div class="current-flow-message" role="status" aria-live="polite"></div>
       </div>`;
     const query = (selector) => this.panel.querySelector('.current-flow-' + selector);
     this.enabledInput = query('enabled'); this.speedInput = query('speed');
     this.colorInput = query('color'); this.sizeInput = query('size');
+    this.densityInput = query('density'); this.densityValue = query('density-value');
     this.count = query('count'); this.stateLabel = query('state'); this.message = query('message');
     this.speedValue = query('speed-value'); this.colorValue = query('color-value'); this.sizeValue = query('size-value');
     this.wireInputs = new Map();
@@ -113,6 +116,7 @@ export class CurrentFlowController {
     this.speedInput.addEventListener('input', () => this._change({ speed: Number(this.speedInput.value) }));
     this.colorInput.addEventListener('input', () => this._change({ color: this.colorInput.value }));
     this.sizeInput.addEventListener('input', () => this._change({ size: Number(this.sizeInput.value) }));
+    this.densityInput.addEventListener('input', () => this._change({ density: Number(this.densityInput.value) / 100 }));
     document.body.append(this.toggleButton, this.panel);
     this.layoutRegistration = registerMeshPanel(this.panel, this.toggleButton, 2);
   }
@@ -121,12 +125,14 @@ export class CurrentFlowController {
     this.enabledInput.checked = this.settings.enabled;
     this.speedInput.value = String(this.settings.speed);
     this.colorInput.value = this.settings.color; this.sizeInput.value = String(this.settings.size);
+    this.densityInput.value = String(Math.round(this.settings.density * 100));
+    this.densityValue.textContent = Math.round(this.settings.density * 100) + '%';
     this.speedValue.textContent = this.settings.speed.toFixed(1) + ' m/s';
     this.sizeValue.textContent = this.settings.size + ' px'; this.colorValue.textContent = this.settings.color.toUpperCase();
     this.stateLabel.textContent = this.settings.enabled ? '· On' : '· Off';
     const routes = this.particles.routes.length;
     this.count.textContent = routes ? routes + ' cable spans · ' + this.groups.length + ' wire objects' : 'No traceable open cable tubes found in this model.';
-    for (const input of [this.enabledInput, this.speedInput, this.colorInput, this.sizeInput]) input.disabled = !routes;
+    for (const input of [this.enabledInput, this.speedInput, this.colorInput, this.sizeInput, this.densityInput]) input.disabled = !routes;
     for (const [key, input] of this.wireInputs) input.checked = this.settings.groups[key] !== false;
     for (const [key, input] of this.wireDirections) input.value = this.settings.directions[key] || this.settings.direction;
   }

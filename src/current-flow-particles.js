@@ -4,8 +4,11 @@ import {
 } from 'three';
 import { extractWireRoutes } from './wire-routes.js';
 import { sourceObject, objectName } from './model-objects.js';
+import { correctFlowRoute } from './flow-route-corrections.js';
 
-export const FLOW_DEFAULTS = Object.freeze({ enabled: true, speed: 1, direction: 'forward', color: '#35d9ff', size: 6 });
+export const FLOW_DEFAULTS = Object.freeze({ enabled: true, speed: 1, direction: 'forward', color: '#35d9ff', size: 6, density: 1 });
+const MAX_PARTICLES = 4096;
+const MAX_DENSITY = 3;
 
 export function parseFlowSettings(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid current flow settings.');
@@ -13,8 +16,9 @@ export function parseFlowSettings(input) {
   for (const key of Object.keys(FLOW_DEFAULTS)) if (Object.hasOwn(input, key)) settings[key] = input[key];
   if (typeof settings.enabled !== 'boolean' || !Number.isFinite(settings.speed) || settings.speed < 0.1 || settings.speed > 10 ||
       !Number.isFinite(settings.size) || settings.size < 2 || settings.size > 16 ||
+      !Number.isFinite(settings.density) || settings.density < 0.1 || settings.density > MAX_DENSITY ||
       !['forward', 'reverse'].includes(settings.direction) || !/^#[0-9a-f]{6}$/i.test(settings.color)) {
-    throw new Error('Invalid current flow speed, direction, color, size, or On/Off value.');
+    throw new Error('Invalid current flow speed, direction, color, size, density, or On/Off value.');
   }
   settings.color = settings.color.toLowerCase();
   if (input.groups !== undefined) {
@@ -57,7 +61,7 @@ export function collectFlowWires(root, associations = null) {
       const paths = cache.get(mesh.geometry);
       if (!paths.length) return;
       if (!groups.has(key)) groups.set(key, { key, name, object, routes: [] });
-      groups.get(key).routes.push(...paths.map((path) => ({ ...path, mesh })));
+      groups.get(key).routes.push(...paths.map((path) => ({ ...correctFlowRoute(name, path), mesh })));
     } catch (error) {
       console.warn('[Current Flow] Unable to trace wire object:', name, error);
     }
@@ -87,12 +91,22 @@ export class CurrentFlowParticles {
     this.disposed = false;
     this.transformCache = new Map();
     const all = groups.flatMap((group) => group.routes.map((route) => ({ ...route, group })));
-    const perRouteBudget = Math.max(1, Math.floor(4096 / Math.max(all.length, 1)));
-    this.routes = all.slice(0, 4096).map((route, index) => ({
-      ...route, count: Math.min(perRouteBudget, 24, Math.max(3, Math.ceil(route.length / 1.5))),
-      phase: (index * 0.38196601125) % 1, curve: null, worldRadius: 0,
-    }));
-    const capacity = this.routes.reduce((sum, route) => sum + route.count, 0);
+    const perRouteBudget = Math.max(1, Math.floor(MAX_PARTICLES / Math.max(all.length, 1)));
+    const selected = all.slice(0, MAX_PARTICLES);
+    const baseCounts = selected.map((route) => Math.min(perRouteBudget, 24, Math.max(3, Math.ceil(route.length / 1.5))));
+    const baselineTotal = baseCounts.reduce((sum, count) => sum + count, 0);
+    const extraScale = Math.min(1, (MAX_PARTICLES - baselineTotal) / Math.max(1, baselineTotal * (MAX_DENSITY - 1)));
+    this.routes = selected.map((route, index) => {
+      const baseCount = baseCounts[index];
+      const maxCount = baseCount + Math.floor(baseCount * (MAX_DENSITY - 1) * extraScale);
+      return {
+        ...route, baseCount, maxCount,
+        count: Math.min(maxCount, Math.max(1, Math.round(baseCount * this.settings.density))),
+        phase: (index * 0.38196601125) % 1, curve: null, worldRadius: 0,
+      };
+    });
+    // Reserve the slider's maximum once; changing density reuses the buffer.
+    const capacity = this.routes.reduce((sum, route) => sum + route.maxCount, 0);
     this.positions = new Float32Array(capacity * 3);
     this.geometry = new BufferGeometry();
     this.geometry.setAttribute('position', new Float32BufferAttribute(this.positions, 3).setUsage(DynamicDrawUsage));
@@ -122,6 +136,9 @@ export class CurrentFlowParticles {
     this.settings = parseFlowSettings(settings);
     this.material.color.set(this.settings.color);
     this.material.size = this.settings.size;
+    for (const route of this.routes) {
+      route.count = Math.min(route.maxCount, Math.max(1, Math.round(route.baseCount * this.settings.density)));
+    }
     this.effectRoot.visible = this.settings.enabled;
   }
 

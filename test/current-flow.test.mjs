@@ -141,12 +141,13 @@ test('Properties exports flow settings even when no annotations or colors exist'
   try {
     const controller = Object.assign(Object.create(MeshAnnotationController.prototype), {
       annotations: {}, modelKey: 'model', _setStatus() {},
-      flowController: { hasRoutes: true, exportSettings: () => ({ ...FLOW_DEFAULTS, speed: 2.5 }) },
+      flowController: { hasRoutes: true, exportSettings: () => ({ ...FLOW_DEFAULTS, speed: 2.5, density: 1.8 }) },
     });
     controller.exportAnnotations();
     const payload = JSON.parse(await exported.text());
     assert.deepEqual(payload.annotations, []);
     assert.equal(payload.currentFlow.speed, 2.5);
+    assert.equal(payload.currentFlow.density, 1.8);
     assert.equal(payload.format, 'three-gltf-viewer-annotations');
   } finally {
     globalThis.document = originalDocument;
