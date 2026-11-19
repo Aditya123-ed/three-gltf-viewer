@@ -164,7 +164,7 @@ class App {
 					this.meshAnnotationController.flowController = this.currentFlowController;
 					this.meshAnnotationController._updateCounts();
 					this.environmentVisibilityController = new EnvironmentVisibilityController(
-						loadedScene, this.viewer, annotationModelKey,
+						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,
 					);
 
 					this.viewer.setMeshPickHandler((mesh) =>

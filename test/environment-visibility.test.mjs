@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
-import { collectEnvironmentObjects, EnvironmentVisibilityController } from '../src/environment-visibility.js';
+import { collectEnvironmentObjects, collectEnvironmentMeshGroups, EnvironmentVisibilityController } from '../src/environment-visibility.js';
 import { collectModelObjects, isObjectVisible } from '../src/model-objects.js';
 import { MeshAppearanceController } from '../src/mesh-appearance.js';
 
@@ -30,11 +30,14 @@ test('a named environment collection controls all descendants and keeps their hi
   assert.equal(railing.parent, nested);
 });
 
-function controlsFor(root, key, viewer = {}) {
+function controlsFor(root, key, viewer = {}, associations = null) {
   const objects = collectEnvironmentObjects(root, key);
+  const groups = collectEnvironmentMeshGroups(root, objects, associations);
   return Object.assign(Object.create(EnvironmentVisibilityController.prototype), {
-    viewer: { invalidateShadows() {}, ...viewer }, objects,
-    originalVisibility: new Map(objects.map((object) => [object, object.visible])),
+    viewer: { invalidateShadows() {}, ...viewer }, objects, groups,
+    originalVisibility: new Map([...objects, ...groups.map((group) => group.object)].map((object) => [object, object.visible])),
+    objectVisibility: new Map(groups.map((group) => [group.object, group.object.visible])),
+    objectInputs: new Map(groups.map((group) => [group.object, {}])), count: {}, help: {},
     enabledInput: {}, storageKey: 'test-environment',
   });
 }
@@ -90,11 +93,92 @@ test('visibility saves per model and restores original flags on disposal', () =>
     let removed = 0;
     controls.layoutRegistration = { unregister() { removed++; } };
     controls.toolbar = { remove() { removed++; } };
+    controls.panel = { remove() { removed++; } };
     controls.dispose(); controls.dispose();
     assert.equal(collection.visible, true);
-    assert.equal(removed, 2);
+    assert.equal(removed, 3);
     controls.setEnabled(false);
     assert.equal(collection.visible, true);
+  } finally { globalThis.window = oldWindow; }
+});
+
+test('Environment dropdown lists only source objects in the collection and keeps material parts in one row', () => {
+  const root = new Group(), environment = new Group(), nested = new Group();
+  environment.name = 'Enviroenment'; nested.name = 'Landscape';
+  const railing = new Group(); railing.name = 'Railling';
+  railing.add(mesh('primitive_0'), mesh('primitive_1'));
+  const grass = mesh('Base_Grass'), station = mesh('Transformer');
+  nested.add(railing); environment.add(grass, nested); root.add(environment, station);
+  const associations = new Map([[environment, { nodes: 0 }], [nested, { nodes: 1 }],
+    [railing, { nodes: 2 }], [grass, { nodes: 3 }], [station, { nodes: 4 }]]);
+  const objects = collectEnvironmentObjects(root, 'dropped.glb');
+  const groups = collectEnvironmentMeshGroups(root, objects, associations);
+  assert.deepEqual(groups.map((group) => group.name), ['Base_Grass', 'Railling']);
+  assert.equal(groups[1].meshes.length, 2);
+  assert.ok(!groups.some((group) => group.object === station || group.object === environment));
+});
+
+test('individual object switches stay independent across the master switch and preserve appearance', () => {
+  const root = new Group(), railing = new Group(); railing.name = 'Railling';
+  railing.add(mesh('primitive_0'), mesh('primitive_1'));
+  const grass = mesh('Base_Grass'), sand = mesh('Base_Sand'), station = mesh('Transformer');
+  root.add(railing, grass, sand, station);
+  const associations = new Map(root.children.map((object, nodes) => [object, { nodes }]));
+  const appearance = new MeshAppearanceController(root);
+  appearance.setColor([grass], '#ff0000'); appearance.setOpacity(grass, 40);
+  const controls = controlsFor(root, '/models/client.glb', {}, associations);
+  const writes = new Map(), oldWindow = globalThis.window;
+  globalThis.window = { localStorage: { setItem: (key, value) => writes.set(key, value) } };
+  try {
+    controls.setEnabled(true, false);
+    controls.setObjectEnabled(railing, false);
+    for (const part of railing.children) assert.equal(isObjectVisible(part), false);
+    assert.equal(isObjectVisible(grass), true);
+    assert.equal(isObjectVisible(sand), true);
+    controls.setEnabled(false, false);
+    assert.equal(isObjectVisible(grass), false);
+    assert.equal(isObjectVisible(station), true);
+    // Object choices may be adjusted while the whole environment is hidden.
+    controls.setObjectEnabled(sand, false);
+    controls.setEnabled(true, false);
+    assert.equal(isObjectVisible(railing), false);
+    assert.equal(isObjectVisible(sand), false);
+    assert.equal(isObjectVisible(grass), true);
+    assert.equal(controls.objectInputs.get(railing).checked, false);
+    assert.equal(controls.objectInputs.get(grass).checked, true);
+    assert.equal(grass.material.color.getHexString(), 'ff0000');
+    assert.equal(appearance.getOpacity(grass), 40);
+    controls.setObjectEnabled(station, false);
+    assert.equal(station.visible, true);
+    const saved = JSON.parse(writes.get('test-environment:objects'));
+    assert.equal(saved.length, 3);
+    assert.equal(saved.find((entry) => entry.path.endsWith('Railling')).visible, false);
+    controls.setObjectEnabled(railing, true);
+    for (const part of railing.children) assert.equal(isObjectVisible(part), true);
+    assert.equal(isObjectVisible(sand), false);
+  } finally { globalThis.window = oldWindow; appearance.dispose(); }
+});
+
+test('saved object visibility matches stable paths and rejects unknown, malformed, or ambiguous entries', () => {
+  const root = new Group(), grass = mesh('Base_Grass'), sand = mesh('Base_Sand'); root.add(grass, sand);
+  const controls = controlsFor(root, '/models/client.glb');
+  const path = controls.groups.find((group) => group.object === grass).displayPath;
+  let saved = [{ path, visible: false }, { path: 'Transformer', visible: false }, { path: 'Base_Sand', visible: 'false' }];
+  const oldWindow = globalThis.window;
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(saved) } };
+  try {
+    controls._loadObjectVisibility(); controls.setEnabled(true, false);
+    assert.equal(grass.visible, false); assert.equal(sand.visible, true);
+    controls.objectVisibility.set(grass, true);
+    saved = [{ path, visible: false }, { path, visible: true }];
+    controls._loadObjectVisibility();
+    assert.equal(controls.objectVisibility.get(grass), true);
+    const duplicate = mesh('Base_Grass'); root.add(duplicate);
+    const ambiguous = controlsFor(root, '/models/client.glb');
+    saved = [{ path, visible: false }];
+    ambiguous._loadObjectVisibility();
+    assert.equal(ambiguous.objectVisibility.get(duplicate), true);
+    assert.equal(ambiguous.objectVisibility.get(grass), false);
   } finally { globalThis.window = oldWindow; }
 });
 
