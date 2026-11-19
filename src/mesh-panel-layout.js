@@ -3,7 +3,7 @@ let resizeBound = false;
 
 function updateMeshPanelLayout() {
   const visible = registrations
-    .filter((item) => item.panel.isConnected && !item.panel.hidden)
+    .filter((item) => item.panel?.isConnected && !item.panel.hidden)
     .sort((a, b) => a.order - b.order);
 
   registrations.forEach((item) => {
@@ -54,4 +54,8 @@ export function registerMeshPanel(panel, toggleButton, order = 0) {
       updateMeshPanelLayout();
     },
   };
+}
+
+export function registerMeshToolbar(toolbar, order) {
+  return registerMeshPanel(null, toolbar, order);
 }

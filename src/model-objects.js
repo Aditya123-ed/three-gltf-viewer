@@ -1,3 +1,10 @@
+export function isObjectVisible(object) {
+  for (let current = object; current; current = current.parent) {
+    if (!current.visible) return false;
+  }
+  return Boolean(object);
+}
+
 // GLTFLoader may split one exported object into many material primitives. All
 // object-facing panels use the source node association rather than those parts.
 export function sourceObject(mesh, root, associations = null) {

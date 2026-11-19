@@ -4,6 +4,7 @@ import { Viewer } from './viewer.js';
 import { MeshAnnotationController } from './mesh-annotations.js';
 import { MeshAppearanceController } from './mesh-appearance.js';
 import { CurrentFlowController } from './current-flow.js';
+import { EnvironmentVisibilityController } from './environment-visibility.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -38,6 +39,7 @@ class App {
 		this.meshAppearanceController = null;
 		this.meshAnnotationController = null;
 		this.currentFlowController = null;
+		this.environmentVisibilityController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
 		this.inputEl = el.querySelector('#file-input');
@@ -116,6 +118,8 @@ class App {
 		}
 		this.currentFlowController?.dispose();
 		this.currentFlowController = null;
+		this.environmentVisibilityController?.dispose();
+		this.environmentVisibilityController = null;
 		this.meshAppearanceController?.dispose();
 		this.meshAppearanceController = null;
 
@@ -159,6 +163,9 @@ class App {
 					);
 					this.meshAnnotationController.flowController = this.currentFlowController;
 					this.meshAnnotationController._updateCounts();
+					this.environmentVisibilityController = new EnvironmentVisibilityController(
+						loadedScene, this.viewer, annotationModelKey,
+					);
 
 					this.viewer.setMeshPickHandler((mesh) =>
 						this.meshAnnotationController?.selectFromViewport(mesh),

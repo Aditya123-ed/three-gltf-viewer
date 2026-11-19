@@ -38,6 +38,7 @@ import { GUI } from 'dat.gui';
 
 import { environments } from './environments.js';
 import { DAYLIGHT_NAME, createDaylightLights, daylightSunColor, fitDaylightShadow } from './daylight.js';
+import { isObjectVisible } from './model-objects.js';
 
 const DEFAULT_CAMERA = '[default]';
 
@@ -256,6 +257,7 @@ export class Viewer {
 			(intersection) =>
 				intersection.object &&
 				intersection.object.isMesh &&
+				isObjectVisible(intersection.object) &&
 				intersection.object.geometry,
 		);
 
@@ -561,7 +563,7 @@ export class Viewer {
 	 */
 	selectMesh(mesh) {
 		this.clearSelectedMesh();
-		if (!mesh || !this.content) return;
+		if (!mesh || !this.content || !isObjectVisible(mesh)) return;
 
 		let belongsToContent = false;
 		this.content.traverse((node) => {

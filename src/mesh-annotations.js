@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { registerMeshPanel } from './mesh-panel-layout.js';
 import { ObjectColorController } from './object-colors.js';
 import { ObjectTransparencyController } from './object-transparency.js';
-import { collectModelObjects, objectPath } from './model-objects.js';
+import { collectModelObjects, isObjectVisible, objectPath } from './model-objects.js';
 
 const STYLE_ID = 'mesh-annotation-controller-styles';
 const FORMAT = 'three-gltf-viewer-annotations';
@@ -980,8 +980,10 @@ export class MeshAnnotationController {
       if (!annotation) return;
       this._ensureMarker(record);
 
-      if (!this.showLabels) {
+      const objectVisible = isObjectVisible(record.mesh);
+      if (!this.showLabels || !objectVisible) {
         record.marker.hidden = true;
+        if (!objectVisible && record === this.previewRecord) this._hidePreview(false);
         return;
       }
 
