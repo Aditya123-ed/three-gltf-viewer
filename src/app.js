@@ -5,6 +5,7 @@ import { MeshAnnotationController } from './mesh-annotations.js';
 import { MeshAppearanceController } from './mesh-appearance.js';
 import { CurrentFlowController } from './current-flow.js';
 import { EnvironmentVisibilityController } from './environment-visibility.js';
+import { MeshVideoController } from './mesh-videos.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
 import { Footer } from './components/footer';
@@ -40,6 +41,7 @@ class App {
 		this.meshAnnotationController = null;
 		this.currentFlowController = null;
 		this.environmentVisibilityController = null;
+		this.meshVideoController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
 		this.inputEl = el.querySelector('#file-input');
@@ -112,6 +114,8 @@ class App {
 	 */
 	view(rootFile, rootPath, fileMap) {
 		// Remove controls attached to the previous model before the viewer clears it.
+		this.meshVideoController?.dispose();
+		this.meshVideoController = null;
 		if (this.meshAnnotationController) {
 			this.meshAnnotationController.dispose();
 			this.meshAnnotationController = null;
@@ -166,10 +170,14 @@ class App {
 					this.environmentVisibilityController = new EnvironmentVisibilityController(
 						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,
 					);
-
-					this.viewer.setMeshPickHandler((mesh) =>
-						this.meshAnnotationController?.selectFromViewport(mesh),
+					this.meshVideoController = new MeshVideoController(
+						loadedScene, annotationModelKey, gltf.parser?.associations,
 					);
+
+					this.viewer.setMeshPickHandler((mesh) => {
+						this.meshAnnotationController?.selectFromViewport(mesh);
+						this.meshVideoController?.selectFromViewport(mesh);
+					});
 				}
 
 				// TODO: GLTFLoader parsing can fail on invalid files. Ideally,
