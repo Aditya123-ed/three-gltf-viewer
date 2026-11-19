@@ -171,7 +171,7 @@ class App {
 						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,
 					);
 					this.meshVideoController = new MeshVideoController(
-						loadedScene, annotationModelKey, gltf.parser?.associations,
+						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,
 					);
 
 					this.viewer.setMeshPickHandler((mesh) => {

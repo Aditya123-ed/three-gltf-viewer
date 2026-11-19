@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
-import { collectMeshVideoBindings, MeshVideoController, TRANSFORMER_VIDEO, vimeoEmbedUrl } from '../src/mesh-videos.js';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
+import { collectMeshVideoBindings, MeshVideoController, placeMeshVideoPopup, projectMeshVideoAnchor, TRANSFORMER_VIDEO, vimeoEmbedUrl } from '../src/mesh-videos.js';
 
 function fixture() {
   const root = new Group(), transformer = new Group(), original = new MeshStandardMaterial({ color: '#123456' });
@@ -67,16 +67,63 @@ test('the embed URL keeps manual playback controls and never accepts a non-Vimeo
 });
 
 test('closing or disposing unloads the player so playback cannot continue behind a closed popup', () => {
-  let frames = 1, closes = 0, removed = 0;
+  let frames = 1, removed = 0, callbacksRemoved = 0;
   const controller = Object.assign(Object.create(MeshVideoController.prototype), {
     activeBinding: {},
     playerSlot: { replaceChildren() { frames = 0; } },
-    dialog: { open: true, close() { this.open = false; closes++; }, remove() { removed++; } },
+    popup: { hidden: false }, overlay: { remove() { removed++; } },
+    removeFrameCallback() { callbacksRemoved++; },
     injectedStyle: { remove() { removed++; } },
   });
   controller.close();
   assert.equal(frames, 0); assert.equal(controller.activeBinding, null);
-  assert.equal(controller.dialog.open, false); assert.equal(closes, 1);
+  assert.equal(controller.popup.hidden, true);
   controller.dispose(); controller.dispose();
-  assert.equal(removed, 2); assert.equal(closes, 1);
+  assert.equal(removed, 2); assert.equal(callbacksRemoved, 1);
+});
+
+test('video anchor follows the whole object and active camera, and rejects off-screen or behind-camera objects', () => {
+  const { root, transformer } = fixture();
+  const camera = new PerspectiveCamera(60, 2, 0.1, 1000); camera.position.set(0, 0, 20); camera.lookAt(0, 0, 0);
+  const initial = projectMeshVideoAnchor(transformer, camera, 800, 400);
+  assert.equal(initial.x, 400); assert.equal(initial.y, 200);
+  assert.ok(initial.left < 400 && initial.right > 400);
+  root.position.x = 2;
+  const moved = projectMeshVideoAnchor(transformer, camera, 800, 400);
+  assert.ok(moved.x > initial.x);
+  camera.position.x = 2; camera.lookAt(new Vector3(2, 0, 0));
+  assert.ok(Math.abs(projectMeshVideoAnchor(transformer, camera, 800, 400).x - initial.x) < 1e-8);
+  root.position.x = 1000;
+  assert.equal(projectMeshVideoAnchor(transformer, camera, 800, 400), null);
+  root.position.x = 2; camera.lookAt(2, 0, 40);
+  assert.equal(projectMeshVideoAnchor(transformer, camera, 800, 400), null);
+  assert.equal(projectMeshVideoAnchor(transformer, camera, 0, 0), null);
+});
+
+test('compact video placement stays beside the object, flips at the right edge, and fits small viewports', () => {
+  const popup = { width: 280, height: 250 }, viewport = { width: 1000, height: 700 };
+  assert.deepEqual(placeMeshVideoPopup({ x: 400, y: 250, left: 350, right: 450 }, popup, viewport), { left: 464, top: 242 });
+  assert.deepEqual(placeMeshVideoPopup({ x: 900, y: 690, left: 850, right: 950 }, popup, viewport), { left: 556, top: 440 });
+  assert.deepEqual(placeMeshVideoPopup({ x: 150, y: 120, left: 40, right: 260 }, { width: 280, height: 220 }, { width: 300, height: 240 }), { left: 10, top: 10 });
+});
+
+test('following the camera keeps the same playing iframe and closes it when the selected object disappears', () => {
+  const { root, parts, associations } = fixture();
+  const binding = collectMeshVideoBindings(root, '/models/client.glb', associations)[0];
+  const camera = new PerspectiveCamera(60, 2, 0.1, 1000); camera.position.z = 20; camera.lookAt(0, 0, 0);
+  const rect = { left: 14, top: 64, width: 1000, height: 700 };
+  let unloads = 0;
+  const controller = Object.assign(Object.create(MeshVideoController.prototype), {
+    activeBinding: binding,
+    viewer: { activeCamera: camera, renderer: { domElement: { getBoundingClientRect: () => rect } } },
+    overlay: { getBoundingClientRect: () => rect },
+    popup: { offsetWidth: 280, offsetHeight: 250, style: {}, hidden: false },
+    playerSlot: { replaceChildren() { unloads++; } },
+  });
+  controller._updatePosition(); const firstLeft = controller.popup.style.left;
+  camera.position.x = 2; controller._updatePosition();
+  assert.notEqual(controller.popup.style.left, firstLeft);
+  assert.equal(controller.activeBinding, binding); assert.equal(unloads, 0);
+  parts.forEach((part) => { part.visible = false; }); controller._updatePosition();
+  assert.equal(controller.popup.hidden, true); assert.equal(unloads, 1);
 });
