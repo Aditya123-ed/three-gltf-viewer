@@ -42,10 +42,16 @@ export function parseFlowSettings(input) {
   return settings;
 }
 
-export function collectFlowWires(root, associations = null) {
+export function collectFlowWires(root, associations = null, excludedObjects = []) {
   const groups = new Map(), cache = new Map();
+  const excluded = new Set(excludedObjects);
   root.traverse((mesh) => {
     if (!mesh.isMesh || mesh.isInstancedMesh || !mesh.geometry) return;
+    // Collection membership takes precedence over cable-like object names.
+    for (let object = mesh; object; object = object.parent) {
+      if (excluded.has(object)) return;
+      if (object === root) break;
+    }
     const object = sourceObject(mesh, root, associations);
     const name = objectName(object);
     if (!/(?:wire|cable|conductor|curve|b[eé]zier)/i.test(name)) return;

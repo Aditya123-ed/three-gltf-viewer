@@ -46,11 +46,11 @@ test('the revised Drive export has four Environment rows and a separate whole-ho
   const { root, associations } = exportedFixture();
   const environment = collectEnvironmentObjects(root, '/models/client.glb');
   const houses = collectHouseObjects(root, '/models/client.glb');
-  assert.equal(collectModelObjects(root, associations).length, 57);
-  assert.equal(root.children.reduce((sum, object) => sum + object.children.length, 0), 242);
+  assert.equal(collectModelObjects(root, associations).length, 54);
+  assert.equal(root.children.reduce((sum, object) => sum + object.children.length, 0), 241);
   assert.deepEqual(collectEnvironmentMeshGroups(root, environment, associations).map((group) => group.name), ['Railling', 'Base_Grass', 'Base_Sand', 'Road']);
-  assert.equal(houses.length, 16);
-  assert.equal(houses.reduce((sum, object) => sum + object.children.length, 0), 19);
+  assert.equal(houses.length, 13);
+  assert.equal(houses.reduce((sum, object) => sum + object.children.length, 0), 18);
   assert.ok(houses.every((object) => !environment.includes(object)));
   assert.equal(root.children.filter((object) => !houses.includes(object) && !environment.includes(object)).length, 37);
   const videos = collectMeshVideoBindings(root, '/models/client.glb', associations);
@@ -83,7 +83,7 @@ test('HOUSE GEO and Environment switch independently, preserving materials, sour
   assert.ok(station.every(isObjectVisible));
   assert.equal(part.material.color.getHexString(), 'ff0000'); assert.equal(part.material.opacity, 0.35);
   assert.equal(part.parent, originalParent); assert.equal(invalidations, 3);
-  assert.equal(collectModelObjects(root, associations).length, 57);
+  assert.equal(collectModelObjects(root, associations).length, 54);
   appearance.dispose();
 });
 

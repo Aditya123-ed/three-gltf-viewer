@@ -1,5 +1,5 @@
 {
-  "fileSize": 174863308,
+  "fileSize": 174862288,
   "objects": [
     {
       "name": "Orange_Highlighter",
@@ -166,10 +166,6 @@
       "parts": 1
     },
     {
-      "name": "Railling.001",
-      "parts": 1
-    },
-    {
       "name": "Basement",
       "parts": 1
     },
@@ -214,20 +210,12 @@
       "parts": 1
     },
     {
-      "name": "BézierCurve.039",
-      "parts": 1
-    },
-    {
       "name": "Entrance",
       "parts": 2
     },
     {
       "name": "Cube.055",
-      "parts": 2
-    },
-    {
-      "name": "Cube.047",
-      "parts": 1
+      "parts": 4
     }
   ]
 }

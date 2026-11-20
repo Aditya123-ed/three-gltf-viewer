@@ -1,5 +1,6 @@
 import { registerMeshPanel } from './mesh-panel-layout.js';
 import { collectFlowWires, CurrentFlowParticles, FLOW_DEFAULTS, parseFlowSettings } from './current-flow-particles.js';
+import { collectHouseObjects } from './house-geometry.js';
 
 const STYLE_ID = 'current-flow-styles';
 
@@ -8,7 +9,7 @@ export class CurrentFlowController {
     this.viewer = viewer;
     this.disposed = false;
     this.storageKey = 'three-gltf-viewer:current-flow:' + modelKey;
-    this.groups = collectFlowWires(root, associations);
+    this.groups = collectFlowWires(root, associations, collectHouseObjects(root, modelKey));
     this.settings = parseFlowSettings(FLOW_DEFAULTS);
     this.hasLocalSettings = false;
     try {

@@ -7,9 +7,9 @@ const COLLECTION_NAMES = ['House Geo', 'House Geometry', 'House'];
 // Verified house objects from the current client export, whose collection
 // hierarchy is flattened. Named collections take precedence when retained.
 const CLIENT_MEMBERS = [
-  'Railling.001', 'Basement', 'Plane', 'Wall', 'Cylinder.008', 'Metal', 'Roof', 'Plane.001',
+  'Basement', 'Plane', 'Wall', 'Cylinder.008', 'Metal', 'Roof', 'Plane.001',
   'Double Door - Industrial', 'Double Door - Industrial.002', 'Single Door with Window - Industrial',
-  'Exterior ladder.007', 'BézierCurve.039', 'Entrance', 'Cube.055', 'Cube.047',
+  'Exterior ladder.007', 'Entrance', 'Cube.055',
 ];
 
 export function collectHouseObjects(root, modelKey) {

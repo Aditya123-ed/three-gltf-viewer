@@ -7,6 +7,7 @@ import { collectFlowWires, CurrentFlowParticles, FLOW_DEFAULTS, parseFlowSetting
 import { CurrentFlowController } from '../src/current-flow.js';
 import { MeshAppearanceController } from '../src/mesh-appearance.js';
 import { MeshAnnotationController } from '../src/mesh-annotations.js';
+import { collectHouseObjects } from '../src/house-geometry.js';
 
 function fixture() {
   const scene = new Scene(), root = new Group();
@@ -199,5 +200,18 @@ test('wire clamps stay in the object list and are excluded from flow candidates'
   const { root, wire, particles } = fixture();
   const clamp = wire.clone(); clamp.name = 'Wire_Clamps'; root.add(clamp);
   assert.deepEqual(collectFlowWires(root).map((group) => group.name), ['Cable']);
+  particles.dispose();
+});
+
+test('house collection geometry is excluded even when its shape and name resemble a current-flow wire', () => {
+  const { root, wire, particles } = fixture();
+  const house = new Group(); house.name = 'HOUSE GEO';
+  const housePipe = wire.clone(); housePipe.name = 'BézierCurve.039'; house.add(housePipe); root.add(house);
+  const substationBranch = wire.clone(); substationBranch.name = 'Branch_Cable'; root.add(substationBranch);
+  assert.deepEqual(collectFlowWires(root).map((group) => group.name), ['Cable', 'BézierCurve.039', 'Branch_Cable']);
+  const houseObjects = collectHouseObjects(root, '/models/client.glb');
+  assert.deepEqual(houseObjects, [house]);
+  assert.deepEqual(collectFlowWires(root, null, houseObjects).map((group) => group.name), ['Cable', 'Branch_Cable']);
+  assert.equal(housePipe.visible, true); assert.equal(housePipe.geometry, wire.geometry);
   particles.dispose();
 });
