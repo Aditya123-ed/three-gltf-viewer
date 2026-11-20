@@ -1,34 +1,15 @@
-import { collectModelObjects, isObjectVisible } from './model-objects.js';
+import { collectCollectionObjects, collectModelObjects, isObjectVisible } from './model-objects.js';
 import { registerMeshPanel } from './mesh-panel-layout.js';
 
 const STYLE_ID = 'environment-visibility-styles';
 const CLIENT_MODEL = '/models/client.glb';
 // The client's Blender collection is flattened by the current GLB export.
 // Keep its verified members explicit; never guess from materials or bounds.
-const CLIENT_MEMBERS = new Set(['Railling', 'Base_Grass', 'Base_Sand']);
+const CLIENT_MEMBERS = new Set(['Railling', 'Base_Grass', 'Base_Sand', 'Road']);
 const COLLECTION_NAMES = new Set(['enviroenment', 'environment']);
 
 export function collectEnvironmentObjects(root, modelKey) {
-  const collections = [];
-  root.traverse((object) => {
-    const name = String(object.userData.name || object.name || '').trim().toLowerCase();
-    if (COLLECTION_NAMES.has(name)) collections.push(object);
-  });
-  if (collections.length) {
-    // A nested collection is already controlled by its named parent.
-    return collections.filter((object) => {
-      for (let parent = object.parent; parent; parent = parent.parent) {
-        if (collections.includes(parent)) return false;
-      }
-      return true;
-    });
-  }
-  if (modelKey !== CLIENT_MODEL) return [];
-  const members = [];
-  root.traverse((object) => {
-    if (CLIENT_MEMBERS.has(object.userData.name || object.name)) members.push(object);
-  });
-  return members;
+  return collectCollectionObjects(root, COLLECTION_NAMES, modelKey === CLIENT_MODEL ? CLIENT_MEMBERS : []);
 }
 
 export function collectEnvironmentMeshGroups(root, objects, associations = null) {

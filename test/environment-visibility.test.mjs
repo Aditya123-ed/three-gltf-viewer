@@ -42,7 +42,7 @@ function controlsFor(root, key, viewer = {}, associations = null) {
   });
 }
 
-test('the current flattened client GLB uses only its three verified environment source objects', () => {
+test('the legacy flattened client GLB keeps its three existing environment source objects', () => {
   const root = new Group();
   const railing = new Group(); railing.name = 'Railling'; railing.add(mesh('material_part_0'), mesh('material_part_1'));
   const grass = mesh('Base_Grass'), sand = mesh('Base_Sand'), station = mesh('Support Pillar.007_baked');

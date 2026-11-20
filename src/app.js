@@ -5,6 +5,7 @@ import { MeshAnnotationController } from './mesh-annotations.js';
 import { MeshAppearanceController } from './mesh-appearance.js';
 import { CurrentFlowController } from './current-flow.js';
 import { EnvironmentVisibilityController } from './environment-visibility.js';
+import { HouseGeometryController } from './house-geometry.js';
 import { MeshVideoController } from './mesh-videos.js';
 import { SimpleDropzone } from 'simple-dropzone';
 import { Validator } from './validator.js';
@@ -41,6 +42,7 @@ class App {
 		this.meshAnnotationController = null;
 		this.currentFlowController = null;
 		this.environmentVisibilityController = null;
+		this.houseGeometryController = null;
 		this.meshVideoController = null;
 		this.spinnerEl = el.querySelector('.spinner');
 		this.dropEl = el.querySelector('.dropzone');
@@ -124,6 +126,8 @@ class App {
 		this.currentFlowController = null;
 		this.environmentVisibilityController?.dispose();
 		this.environmentVisibilityController = null;
+		this.houseGeometryController?.dispose();
+		this.houseGeometryController = null;
 		this.meshAppearanceController?.dispose();
 		this.meshAppearanceController = null;
 
@@ -169,6 +173,9 @@ class App {
 					this.meshAnnotationController._updateCounts();
 					this.environmentVisibilityController = new EnvironmentVisibilityController(
 						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,
+					);
+					this.houseGeometryController = new HouseGeometryController(
+						loadedScene, this.viewer, annotationModelKey,
 					);
 					this.meshVideoController = new MeshVideoController(
 						loadedScene, this.viewer, annotationModelKey, gltf.parser?.associations,

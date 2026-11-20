@@ -18,6 +18,28 @@ export function objectName(object) {
   return object.userData.name || object.name || 'Unnamed object';
 }
 
+export function collectCollectionObjects(root, collectionNames, fallbackMembers = []) {
+  const normalize = (name) => String(name).trim().toLowerCase().replace(/[\s_-]+/g, '');
+  const names = new Set([...collectionNames].map(normalize));
+  const collections = [];
+  root.traverse((object) => {
+    if (names.has(normalize(objectName(object)))) collections.push(object);
+  });
+  if (collections.length) {
+    return collections.filter((object) => {
+      for (let parent = object.parent; parent; parent = parent.parent) {
+        if (collections.includes(parent)) return false;
+      }
+      return true;
+    });
+  }
+  const members = new Set(fallbackMembers), objects = [];
+  root.traverse((object) => {
+    if (members.has(objectName(object))) objects.push(object);
+  });
+  return objects;
+}
+
 export function objectPath(object) {
   const names = [];
   for (let current = object; current; current = current.parent) {

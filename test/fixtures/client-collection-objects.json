@@ -1,0 +1,233 @@
+{
+  "fileSize": 174863308,
+  "objects": [
+    {
+      "name": "Orange_Highlighter",
+      "parts": 1
+    },
+    {
+      "name": "Purple_Highlight_Base",
+      "parts": 1
+    },
+    {
+      "name": "Green_Highlight_Base",
+      "parts": 1
+    },
+    {
+      "name": "Input_Element_Shortpole.003_baked",
+      "parts": 4
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short_baked",
+      "parts": 5
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short.002_baked",
+      "parts": 5
+    },
+    {
+      "name": "Center_Element_Transmitter.002_baked",
+      "parts": 11
+    },
+    {
+      "name": "Center_Element_Transmitter.003_baked",
+      "parts": 11
+    },
+    {
+      "name": "Center_Element_Transmitter.004_baked",
+      "parts": 11
+    },
+    {
+      "name": "Center_Element_Transmitter.005_baked",
+      "parts": 11
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_baked",
+      "parts": 6
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor.001_baked",
+      "parts": 6
+    },
+    {
+      "name": "Input_Element_Big_Transformer_baked",
+      "parts": 13
+    },
+    {
+      "name": "Output_Element__baked",
+      "parts": 7
+    },
+    {
+      "name": "Output_Element_.001_baked",
+      "parts": 7
+    },
+    {
+      "name": "Output_Element_.002_baked",
+      "parts": 7
+    },
+    {
+      "name": "Output_Element_.003_baked",
+      "parts": 7
+    },
+    {
+      "name": "Output_Element_.004_baked",
+      "parts": 7
+    },
+    {
+      "name": "Center_Element_Transmitter.006_baked",
+      "parts": 11
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor.002_baked",
+      "parts": 6
+    },
+    {
+      "name": "Input_Element_Shortpole.001_baked",
+      "parts": 4
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short.006_baked",
+      "parts": 5
+    },
+    {
+      "name": "Input_Element_Big_Transformer_baked.002",
+      "parts": 13
+    },
+    {
+      "name": "Input_Element_Big_Transformer_baked.003",
+      "parts": 13
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short.004_baked.001",
+      "parts": 5
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short.001_baked.001",
+      "parts": 5
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short.003_baked.001",
+      "parts": 5
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short.005_baked.001",
+      "parts": 5
+    },
+    {
+      "name": "Centre_Grid_Supply_Distributor_Short",
+      "parts": 5
+    },
+    {
+      "name": "Support Pillar.004_baked",
+      "parts": 7
+    },
+    {
+      "name": "Support Pillar.007_baked",
+      "parts": 6
+    },
+    {
+      "name": "Wire_Clamps",
+      "parts": 1
+    },
+    {
+      "name": "Internal wireHorizontal",
+      "parts": 1
+    },
+    {
+      "name": "Internal Supply Wire1",
+      "parts": 1
+    },
+    {
+      "name": "Internal Supply Wire3",
+      "parts": 1
+    },
+    {
+      "name": "Internal Supply Wire2",
+      "parts": 1
+    },
+    {
+      "name": "MainSupply_Wire",
+      "parts": 1
+    },
+    {
+      "name": "Railling",
+      "parts": 3
+    },
+    {
+      "name": "Base_Grass",
+      "parts": 1
+    },
+    {
+      "name": "Base_Sand",
+      "parts": 1
+    },
+    {
+      "name": "Road",
+      "parts": 1
+    },
+    {
+      "name": "Railling.001",
+      "parts": 1
+    },
+    {
+      "name": "Basement",
+      "parts": 1
+    },
+    {
+      "name": "Plane",
+      "parts": 1
+    },
+    {
+      "name": "Wall",
+      "parts": 1
+    },
+    {
+      "name": "Cylinder.008",
+      "parts": 1
+    },
+    {
+      "name": "Metal",
+      "parts": 1
+    },
+    {
+      "name": "Roof",
+      "parts": 1
+    },
+    {
+      "name": "Plane.001",
+      "parts": 2
+    },
+    {
+      "name": "Double Door - Industrial",
+      "parts": 1
+    },
+    {
+      "name": "Double Door - Industrial.002",
+      "parts": 1
+    },
+    {
+      "name": "Single Door with Window - Industrial",
+      "parts": 1
+    },
+    {
+      "name": "Exterior ladder.007",
+      "parts": 1
+    },
+    {
+      "name": "BézierCurve.039",
+      "parts": 1
+    },
+    {
+      "name": "Entrance",
+      "parts": 2
+    },
+    {
+      "name": "Cube.055",
+      "parts": 2
+    },
+    {
+      "name": "Cube.047",
+      "parts": 1
+    }
+  ]
+}
